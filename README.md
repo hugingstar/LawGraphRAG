@@ -93,8 +93,8 @@ classDiagram
         vector embedding
     }
 
-    laws "1" --> "*" articles : 1:N 포함
-    articles "1" --> "*" article_chunks : 1:N 분할
+    laws "1" *-- "*" articles : 포함
+    articles "1" *-- "*" article_chunks : 분할
 ```
 
 **테이블 세부 설명:**
