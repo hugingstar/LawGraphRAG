@@ -7,22 +7,22 @@
 
 ```mermaid
 flowchart TD
-    User([User]) -->|사고 진술문 입력| FastAPI["FastAPI Web Server"]
+    User(["사용자 (User)"]) -->|사고 진술문 입력| FastAPI["웹 서버 (FastAPI Web Server)"]
     
-    subgraph Data_Ingestion_Pipeline
-        LawAPI["법제처 Open API"] -->|법령 XML 수집| Ingest["ingest.py"]
-        Ingest -->|문장 단위 분할| Chunking["chunking.py"]
-        Chunking -->|LangChain HuggingFace| Embed["embeddings.py"]
-        Embed -->|벡터화된 조문 저장| DB[("PostgreSQL, pgvector, pg_trgm")]
+    subgraph Data_Ingestion_Pipeline ["데이터 수집 파이프라인 (Data Ingestion Pipeline)"]
+        LawAPI["법제처 Open API"] -->|법령 XML 수집| Ingest["수집기 (ingest.py)"]
+        Ingest -->|문장 단위 분할| Chunking["분할기 (chunking.py)"]
+        Chunking -->|LangChain HuggingFace| Embed["벡터 변환기 (embeddings.py)"]
+        Embed -->|벡터화된 조문 저장| DB[("데이터베이스 (PostgreSQL, pgvector, pg_trgm)")]
     end
     
-    subgraph LangChain_RAG_Pipeline
-        FastAPI -->|입력 텍스트 전달| TextChunk["chunking.py"]
-        TextChunk -->|청크별 질의| Retriever["HybridSafetyLawRetriever"]
+    subgraph LangChain_RAG_Pipeline ["AI 분석 및 검색 파이프라인 (LangChain RAG Pipeline)"]
+        FastAPI -->|입력 텍스트 전달| TextChunk["질의 분할 (chunking.py)"]
+        TextChunk -->|청크별 질의| Retriever["검색기 (HybridSafetyLawRetriever)"]
         Retriever -->|벡터와 키워드 하이브리드 검색 RRF| DB
         DB -.->|후보 조문 반환| Retriever
-        Retriever -->|LCEL Chain| LLM["ChatGoogleGenerativeAI with_structured_output"]
-        LLM -->|적용 조문 판단 및 발췌| Citation["Citation Merge & Link"]
+        Retriever -->|LCEL Chain| LLM["AI 언어모델 (ChatGoogleGenerativeAI with_structured_output)"]
+        LLM -->|적용 조문 판단 및 발췌| Citation["결과 병합 및 링크 생성 (Citation Merge & Link)"]
     end
     
     Citation --> FastAPI
@@ -60,6 +60,45 @@ flowchart TD
 - **AI 최종 판단 (`ChatGoogleGenerativeAI`)**: 찾아온 후보 법 조문들과 사용자의 사고 진술문을 최신 인공지능인 **Gemini API**에게 넘겨줍니다. *"이 사고 상황에 이 법 조문들이 실제로 적용되는 게 맞는지 확인해줘"*라고 지시(프롬프트)하여, AI가 엄격하게 진짜로 적용되는 조문만 선별하고 인용 근거를 작성합니다.
 - **결과 화면 (FastAPI 웹 서버)**: 최종적으로 선별된 법 조문과 링크를 사용자가 보기 편하도록 화면의 원문 위치에 노란색으로 하이라이트(형광펜) 칠해서 보여줍니다.
 
+#### 3. 데이터베이스 ER 다이어그램 (ERD)
+시스템의 핵심이 되는 PostgreSQL 데이터베이스의 테이블 구조입니다.
+
+```mermaid
+erDiagram
+    laws {
+        int id PK
+        string law_id UK "법령 고유 ID (예: 251643)"
+        string law_name "법령명 (예: 산업안전보건법)"
+        string law_type "법령 종류 (예: 법률, 대통령령)"
+    }
+    
+    articles {
+        int id PK
+        int law_id FK "laws 참조"
+        int article_no "조 번호"
+        int article_no_sub "가지번호 (예: 조의2)"
+        string title "조문 제목"
+        text full_text "조문 원문"
+    }
+    
+    article_chunks {
+        int id PK
+        int article_id FK "articles 참조"
+        text chunk_text "분할된 문장 텍스트"
+        int char_start "원문 시작 위치"
+        int char_end "원문 종료 위치"
+        vector embedding "1024차원 임베딩 벡터"
+    }
+
+    laws ||--o{ articles : "1:N 포함"
+    articles ||--o{ article_chunks : "1:N 분할"
+```
+
+**ERD 설명:**
+- `laws` (법령 테이블): 산업안전보건법, 시행령 등 큰 단위의 법률 정보(이름, 고유 ID 등)를 저장합니다.
+- `articles` (조문 테이블): 각 법령에 속한 실제 조문(예: 제38조)들의 원문 전체와 제목을 보관합니다. 
+- `article_chunks` (조문 조각 테이블): 긴 조문을 검색하기 좋게 문장 단위로 짧게 쪼개어 놓은 테이블입니다. 원문의 어디부터 어디까지인지 위치(`char_start`, `char_end`)를 기록해두고, AI가 이해할 수 있는 수학적 좌표인 `embedding` 값을 같이 저장하여 벡터 검색(유사도 검색)에 핵심적으로 활용됩니다.
+
 ## 준비물
 
 1. Docker / Docker Compose
@@ -75,8 +114,14 @@ cp .env.example .env
 
 ## 실행
 
+아래 명령어들은 Docker를 이용해 우리 시스템을 격리된 환경에서 안전하게 띄우는 과정입니다. 
+
 ```bash
+# 1. 백그라운드에서 데이터베이스(PostgreSQL) 컨테이너를 실행합니다. 
+# (-d 옵션은 백그라운드 실행을 의미하므로 터미널을 계속 쓸 수 있습니다.)
 docker compose up -d db
+
+# 2. 파이썬 API 서버 구동에 필요한 패키지나 환경을 미리 빌드(준비)합니다.
 docker compose build api
 ```
 
