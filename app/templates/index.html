@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>SafetyLawAdvisor</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main>
+    <h1>사고 진술문 조문 인용</h1>
+    <p class="hint">사고 상황을 서술한 글을 입력하면, 적용되는 산업안전보건 관련 조문을 찾아 원문 위치에 표시합니다.</p>
+
+    <textarea id="input-text" rows="10" placeholder="예) 지게차 작업 중 근로자가 넘어진 자재에 깔려 부상을 입었다..."></textarea>
+    <button id="analyze-btn">분석하기</button>
+
+    <div id="status"></div>
+
+    <section id="result" hidden>
+      <h2>결과</h2>
+      <div id="highlighted-text"></div>
+
+      <h2>인용 조문</h2>
+      <ul id="citation-list"></ul>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
