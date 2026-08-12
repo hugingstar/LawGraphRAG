@@ -20,7 +20,7 @@ def get_embedding_model() -> HuggingFaceEmbeddings:
     model_kwargs = {"device": device}
     if device == "cuda":
         # GPU 사용 시 가중치를 절반(float16)으로 줄여 메모리 대폭 절감
-        model_kwargs["model_kwargs"] = {"torch_dtype": torch.float16}
+        model_kwargs["model_kwargs"] = {"dtype": torch.float16}
         
     return HuggingFaceEmbeddings(
         model_name=settings.embedding_model,

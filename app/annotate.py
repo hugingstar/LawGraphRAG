@@ -3,6 +3,7 @@
 """
 
 from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
@@ -91,11 +92,16 @@ def annotate_text(session: Session, text: str, *, top_k: int = 6) -> list[Citati
     
     chain = prompt_template | structured_llm
 
+    # 1. DB Retrieval (Sequential to avoid SQLAlchemy session conflicts)
+    chunk_data = []
     for chunk in chunks:
         docs = retriever.invoke(chunk.text)
-        if not docs:
-            continue
+        if docs:
+            chunk_data.append((chunk, docs))
             
+    # 2. LLM Annotation (Parallel to speed up Gemini API calls)
+    def call_llm(item):
+        chunk, docs = item
         lines = []
         for d in docs:
             lines.append(
@@ -108,7 +114,13 @@ def annotate_text(session: Session, text: str, *, top_k: int = 6) -> list[Citati
             "chunk_text_value": chunk.text,
             "candidates_prompt": candidates_str
         })
-        
+        return chunk, docs, parsed
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        results = executor.map(call_llm, chunk_data)
+
+    # 3. Merge Results
+    for chunk, docs, parsed in results:
         if not parsed:
             continue
             
