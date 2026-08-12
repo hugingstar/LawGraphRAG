@@ -15,10 +15,20 @@ from app.config import settings
 @lru_cache(maxsize=1)
 def get_embedding_model() -> HuggingFaceEmbeddings:
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    
+    # 16GB 메모리 환경 안정성을 위해 VRAM/RAM 사용량 최적화
+    model_kwargs = {"device": device}
+    if device == "cuda":
+        # GPU 사용 시 가중치를 절반(float16)으로 줄여 메모리 대폭 절감
+        model_kwargs["model_kwargs"] = {"torch_dtype": torch.float16}
+        
     return HuggingFaceEmbeddings(
         model_name=settings.embedding_model,
-        model_kwargs={"device": device},
-        encode_kwargs={"normalize_embeddings": True},
+        model_kwargs=model_kwargs,
+        encode_kwargs={
+            "normalize_embeddings": True,
+            "batch_size": 16, # OOM 방지를 위해 배치 사이즈 하향 조정 (기본 32)
+        },
     )
 
 
