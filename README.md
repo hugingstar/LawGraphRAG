@@ -7,22 +7,22 @@
 
 ```mermaid
 flowchart TD
-    User([User]) -->|사고 진술문 입력| FastAPI[FastAPI Web Server]
+    User([User]) -->|사고 진술문 입력| FastAPI["FastAPI Web Server"]
     
-    subgraph "Data Ingestion Pipeline"
-        LawAPI[법제처 Open API] -->|법령 XML 수집| Ingest[ingest.py]
-        Ingest -->|문장 단위 분할| Chunking[chunking.py]
-        Chunking -->|LangChain HuggingFace| Embed[embeddings.py]
-        Embed -->|벡터화된 조문 저장| DB[(PostgreSQL<br>+ pgvector<br>+ pg_trgm)]
+    subgraph Data_Ingestion_Pipeline
+        LawAPI["법제처 Open API"] -->|법령 XML 수집| Ingest["ingest.py"]
+        Ingest -->|문장 단위 분할| Chunking["chunking.py"]
+        Chunking -->|LangChain HuggingFace| Embed["embeddings.py"]
+        Embed -->|벡터화된 조문 저장| DB[("PostgreSQL, pgvector, pg_trgm")]
     end
     
-    subgraph "LangChain RAG Pipeline (annotate.py)"
-        FastAPI -->|입력 텍스트 전달| TextChunk[chunking.py]
-        TextChunk -->|청크별 질의| Retriever[HybridSafetyLawRetriever]
-        Retriever -->|벡터+키워드 하이브리드 검색<br>(RRF)| DB
+    subgraph LangChain_RAG_Pipeline
+        FastAPI -->|입력 텍스트 전달| TextChunk["chunking.py"]
+        TextChunk -->|청크별 질의| Retriever["HybridSafetyLawRetriever"]
+        Retriever -->|벡터와 키워드 하이브리드 검색 RRF| DB
         DB -.->|후보 조문 반환| Retriever
-        Retriever -->|LCEL Chain| LLM[ChatGoogleGenerativeAI<br>with_structured_output]
-        LLM -->|적용 조문 판단 및 발췌| Citation[Citation Merge & Link]
+        Retriever -->|LCEL Chain| LLM["ChatGoogleGenerativeAI with_structured_output"]
+        LLM -->|적용 조문 판단 및 발췌| Citation["Citation Merge & Link"]
     end
     
     Citation --> FastAPI
