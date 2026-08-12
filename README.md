@@ -64,40 +64,42 @@ flowchart TD
 시스템의 핵심이 되는 PostgreSQL 데이터베이스의 테이블 구조입니다.
 
 ```mermaid
-erDiagram
-    laws {
-        int id PK
-        string law_id UK "법령 고유 ID (예: 251643)"
-        string law_name "법령명 (예: 산업안전보건법)"
-        string law_type "법령 종류 (예: 법률, 대통령령)"
+classDiagram
+    direction LR
+    
+    class laws {
+        int id [PK]
+        string law_id [UK]
+        string law_name
+        string law_type
     }
     
-    articles {
-        int id PK
-        int law_id FK "laws 참조"
-        int article_no "조 번호"
-        int article_no_sub "가지번호 (예: 조의2)"
-        string title "조문 제목"
-        text full_text "조문 원문"
+    class articles {
+        int id [PK]
+        int law_id [FK]
+        int article_no
+        int article_no_sub
+        string title
+        text full_text
     }
     
-    article_chunks {
-        int id PK
-        int article_id FK "articles 참조"
-        text chunk_text "분할된 문장 텍스트"
-        int char_start "원문 시작 위치"
-        int char_end "원문 종료 위치"
-        vector embedding "1024차원 임베딩 벡터"
+    class article_chunks {
+        int id [PK]
+        int article_id [FK]
+        text chunk_text
+        int char_start
+        int char_end
+        vector embedding
     }
 
-    laws ||--o{ articles : "1:N 포함"
-    articles ||--o{ article_chunks : "1:N 분할"
+    laws "1" --> "*" articles : 1:N 포함
+    articles "1" --> "*" article_chunks : 1:N 분할
 ```
 
-**ERD 설명:**
-- `laws` (법령 테이블): 산업안전보건법, 시행령 등 큰 단위의 법률 정보(이름, 고유 ID 등)를 저장합니다.
-- `articles` (조문 테이블): 각 법령에 속한 실제 조문(예: 제38조)들의 원문 전체와 제목을 보관합니다. 
-- `article_chunks` (조문 조각 테이블): 긴 조문을 검색하기 좋게 문장 단위로 짧게 쪼개어 놓은 테이블입니다. 원문의 어디부터 어디까지인지 위치(`char_start`, `char_end`)를 기록해두고, AI가 이해할 수 있는 수학적 좌표인 `embedding` 값을 같이 저장하여 벡터 검색(유사도 검색)에 핵심적으로 활용됩니다.
+**테이블 세부 설명:**
+- `laws` (법령): 산업안전보건법 등 큰 단위의 법률 정보를 저장합니다. (`law_id`: 법령 고유 ID)
+- `articles` (조문): 법령에 속한 실제 조문의 원문 전체(`full_text`)와 제목(`title`)을 보관합니다. 
+- `article_chunks` (조문 조각): 긴 조문을 검색하기 좋게 문장 단위로 짧게 쪼개어 놓은 테이블입니다. 원문의 위치(`char_start`, `char_end`)를 기록해두고, AI가 이해할 수 있는 1024차원의 수학적 좌표(`embedding`)를 저장하여 유사도 검색에 활용합니다.
 
 ## 준비물
 
