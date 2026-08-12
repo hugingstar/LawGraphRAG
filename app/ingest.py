@@ -9,6 +9,7 @@ DB upsert -> 조문 청킹 -> 임베딩 저장까지 수행한다.
 
 import datetime
 import sys
+from tqdm import tqdm
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -115,7 +116,7 @@ def ingest_law(session: Session, law_name: str) -> None:
 
     articles = detail.get("articles", [])
     print(f"[ingest] 조문 {len(articles)}개 처리 중...")
-    for article_data in articles:
+    for article_data in tqdm(articles, desc=f"{law_name} 처리중", unit="조문"):
         article = upsert_article(session, law, article_data)
         embed_and_store_chunks(session, article)
 
