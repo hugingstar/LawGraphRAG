@@ -5,6 +5,7 @@ E5 계열 모델은 "query: "/"passage: " 프리픽스를 붙였을 때 성능�
 """
 
 from functools import lru_cache
+import torch
 
 from langchain_huggingface import HuggingFaceEmbeddings
 
@@ -13,8 +14,10 @@ from app.config import settings
 
 @lru_cache(maxsize=1)
 def get_embedding_model() -> HuggingFaceEmbeddings:
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     return HuggingFaceEmbeddings(
         model_name=settings.embedding_model,
+        model_kwargs={"device": device},
         encode_kwargs={"normalize_embeddings": True},
     )
 

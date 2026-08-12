@@ -30,6 +30,13 @@ services:
         condition: service_healthy
     volumes:
       - hf_cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
 volumes:
   db_data:

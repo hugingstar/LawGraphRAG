@@ -104,8 +104,9 @@ classDiagram
 ## 준비물
 
 1. Docker / Docker Compose
-2. 법제처 Open API OC 키: https://open.law.go.kr 에서 회원가입 후 발급
-3. Gemini API 키: https://aistudio.google.com/apikey
+2. **NVIDIA GPU 및 최신 그래픽 드라이버** (선택이지만, 수많은 조문을 임베딩하는 과정의 속도 향상을 위해 강력히 권장됩니다. Docker에서 GPU를 자동으로 사용하도록 설정되어 있습니다.)
+3. 법제처 Open API OC 키: https://open.law.go.kr 에서 회원가입 후 발급
+4. Gemini API 키: https://aistudio.google.com/apikey
 
 ## 설정
 
@@ -124,6 +125,7 @@ cp .env.example .env
 docker compose up -d db
 
 # 2. 파이썬 API 서버 구동에 필요한 패키지나 환경을 미리 빌드(준비)합니다.
+# (이때 docker-compose.yml에 설정된 NVIDIA GPU 가속 기능이 자동으로 연결됩니다.)
 docker compose build api
 ```
 
