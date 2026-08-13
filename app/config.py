@@ -4,19 +4,23 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    postgres_user: str = "safetylaw"
+    postgres_user: str = "lawowly"
     postgres_password: str = "change_me"
-    postgres_db: str = "safetylaw"
+    postgres_db: str = "lawowly"
     postgres_host: str = "db"
     postgres_port: int = 5432
 
     law_oc_key: str = ""
 
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-flash-lite-latest"
 
     embedding_model: str = "intfloat/multilingual-e5-large"
     embedding_dim: int = 1024
+
+    neo4j_uri: str = "bolt://neo4j:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = "change_me"
 
     @property
     def database_url(self) -> str:

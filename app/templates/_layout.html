@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Law Owly{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css?v={{ v }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="topbar-row">
+        <a class="brand" href="{{ ('/dashboard' if request.state.user.is_manager else '/results') if request.state.user else '/login' }}">
+          <span class="brand-mark" aria-hidden="true">🦉</span>
+          <span class="brand-name">Law Owly</span>
+        </a>
+        {% if request.state.user %}
+        <div class="user-chip">
+          <span class="user-hover" tabindex="0">
+            <span class="user-name">{{ request.state.user.display_name }}</span>
+            <span class="user-role">{{ request.state.user.role_label }}</span>
+            <span class="user-card" role="tooltip">
+              <span class="user-card-head">
+                <span class="user-card-name">{{ request.state.user.display_name }}</span>
+                <span class="user-card-role">{{ request.state.user.role_label }}</span>
+              </span>
+              <span class="user-card-rows">
+                <span><b>아이디</b>{{ request.state.user.username }}</span>
+                <span><b>직급</b>{{ request.state.profile.rank or "-" }}</span>
+                <span><b>연락처</b>{{ request.state.profile.contact or "-" }}</span>
+                <span><b>사업장</b>{{ request.state.profile.site or "-" }}</span>
+                <span><b>부서</b>{{ request.state.profile.department or "-" }}</span>
+              </span>
+            </span>
+          </span>
+          <form method="post" action="/logout">
+            <button type="submit" class="btn-link">로그아웃</button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+      {% if request.state.user and not hide_nav %}
+      <nav class="topnav">
+        <a href="/" class="{{ 'active' if active == 'lookup' else '' }}">Advisor</a>
+        <a href="/request" class="{{ 'active' if active == 'request' else '' }}">나의 요청</a>
+        <a href="/results" class="{{ 'active' if active == 'results' else '' }}">나의 요청 리스트</a>
+        <a href="/settings" class="{{ 'active' if active == 'settings' else '' }}">설정</a>
+        {% if request.state.user.is_manager %}
+        <span class="topnav-sep" aria-hidden="true"></span>
+        <a href="/dashboard" class="{{ 'active' if active == 'dashboard' else '' }}">전사 사건 모니터링</a>
+        <a href="/review" class="{{ 'active' if active == 'review' else '' }}">관리자 검토</a>
+        {% endif %}
+      </nav>
+      {% endif %}
+    </header>
+
+    <main class="{{ 'wide' if wide else '' }}">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="page-footer">
+      <p>본 서비스가 제시하는 조문은 참고용이며, 최종 판단은 법제처 원문과 전문가 확인을 거쳐야 합니다.</p>
+    </footer>
+  </div>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

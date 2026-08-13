@@ -1,0 +1,13 @@
+{% extends "_layout.html" %}
+{% block content %}
+      <div class="hero">
+        <h1>접근 권한이 없습니다</h1>
+        <p class="hint">{{ message or "이 페이지에 접근할 권한이 없습니다." }}</p>
+      </div>
+      <section class="card input-card">
+        <p class="hint">필요한 권한이 있다면 안전부서 관리자에게 문의하세요.</p>
+        <div class="action-row">
+          <a class="btn-link-strong" href="/results">나의 요청 리스트로 돌아가기</a>
+        </div>
+      </section>
+{% endblock %}

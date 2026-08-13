@@ -1,0 +1,84 @@
+{% extends "_layout.html" %}
+{% block content %}
+      <div class="auth-wrap">
+        <div class="hero">
+          <h1>회원가입</h1>
+          <p class="hint">부서 신청자 또는 안전부서 관리자 계정을 만듭니다.</p>
+        </div>
+
+        <section class="card input-card">
+          <form method="post" action="/signup">
+            {% if error %}
+            <p class="form-error">{{ error }}</p>
+            {% endif %}
+
+            <div class="field">
+              <label class="field-label" for="username">아이디</label>
+              <input class="text-input" type="text" id="username" name="username" value="{{ username or '' }}" required autofocus>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="display_name">이름</label>
+              <input class="text-input" type="text" id="display_name" name="display_name" value="{{ display_name or '' }}" required>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label" for="password">비밀번호</label>
+                <input class="text-input" type="password" id="password" name="password" required>
+              </div>
+              <div class="field">
+                <label class="field-label" for="password_confirm">비밀번호 확인</label>
+                <input class="text-input" type="password" id="password_confirm" name="password_confirm" required>
+              </div>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label" for="rank">직급</label>
+                <input class="text-input" type="text" id="rank" name="rank" value="{{ rank or '' }}" placeholder="예) 검사반장">
+              </div>
+              <div class="field">
+                <label class="field-label" for="contact">연락처</label>
+                <input class="text-input" type="text" id="contact" name="contact" value="{{ contact or '' }}" placeholder="예) 010-1234-5678" required>
+              </div>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label" for="site_id">사업장</label>
+                <select id="site_id" name="site_id" required>
+                  <option value="">선택하세요</option>
+                  {% for s in sites %}
+                  <option value="{{ s.id }}">{{ s.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label" for="department_id">소속 부서</label>
+                <select id="department_id" name="department_id" required>
+                  <option value="">선택하세요</option>
+                  {% for d in departments %}
+                  <option value="{{ d.id }}">{{ d.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="role">역할</label>
+              <select id="role" name="role">
+                <option value="requester">신청자 (부서)</option>
+                <option value="manager">안전부서 관리자</option>
+              </select>
+            </div>
+
+            <div class="action-row">
+              <button type="submit">가입하기</button>
+            </div>
+          </form>
+        </section>
+
+        <p class="hint auth-alt">이미 계정이 있으신가요? <a href="/login">로그인</a></p>
+      </div>
+{% endblock %}

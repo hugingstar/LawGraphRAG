@@ -1,0 +1,90 @@
+{% extends "_layout.html" %}
+{% block content %}
+      <div class="hero">
+        <h1>설정</h1>
+        <p class="hint">로그인 계정의 개인정보를 직접 수정할 수 있습니다. 여기서 바꾼 정보는 다음 요청부터 "나의 요청"에 자동으로 반영됩니다.</p>
+      </div>
+
+      <section class="card input-card settings-card">
+        <form method="post" action="/settings">
+          {% if error %}
+          <p class="form-error">{{ error }}</p>
+          {% endif %}
+          {% if success %}
+          <p class="form-success">{{ success }}</p>
+          {% endif %}
+
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label" for="username">아이디</label>
+              <input class="text-input" type="text" id="username" value="{{ profile.username }}" disabled>
+            </div>
+            <div class="field">
+              <label class="field-label" for="role_label">역할</label>
+              <input class="text-input" type="text" id="role_label" value="{{ profile.role_label }}" disabled>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="display_name">이름</label>
+            <input class="text-input" type="text" id="display_name" name="display_name" value="{{ profile.display_name }}" required>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label" for="rank">직급</label>
+              <input class="text-input" type="text" id="rank" name="rank" value="{{ profile.rank or '' }}">
+            </div>
+            <div class="field">
+              <label class="field-label" for="contact">연락처</label>
+              <input class="text-input" type="text" id="contact" name="contact" value="{{ profile.contact or '' }}" required>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label" for="site_id">사업장</label>
+              <select id="site_id" name="site_id">
+                <option value="">선택 안 함</option>
+                {% for s in sites %}
+                <option value="{{ s.id }}" {{ "selected" if profile.site_id == s.id else "" }}>{{ s.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="department_id">소속 부서</label>
+              <select id="department_id" name="department_id">
+                <option value="">선택 안 함</option>
+                {% for d in departments %}
+                <option value="{{ d.id }}" {{ "selected" if profile.department_id == d.id else "" }}>{{ d.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="settings-divider"></div>
+
+          <p class="field-group-title">비밀번호 변경 <span class="hint-inline">(변경하지 않으려면 비워두세요)</span></p>
+
+          <div class="field">
+            <label class="field-label" for="current_password">현재 비밀번호</label>
+            <input class="text-input" type="password" id="current_password" name="current_password" autocomplete="current-password">
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label" for="new_password">새 비밀번호</label>
+              <input class="text-input" type="password" id="new_password" name="new_password" autocomplete="new-password">
+            </div>
+            <div class="field">
+              <label class="field-label" for="new_password_confirm">새 비밀번호 확인</label>
+              <input class="text-input" type="password" id="new_password_confirm" name="new_password_confirm" autocomplete="new-password">
+            </div>
+          </div>
+
+          <div class="action-row">
+            <button type="submit">저장</button>
+          </div>
+        </form>
+      </section>
+{% endblock %}

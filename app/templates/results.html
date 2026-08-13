@@ -1,0 +1,38 @@
+{% extends "_layout.html" %}
+{% block content %}
+      <div class="hero">
+        <h1>나의 요청 리스트</h1>
+        <p class="hint">내가 요청한 심층 검토의 진행 상태와 결과를 확인합니다. 보완 요청을 받은 경우 이곳에서 내용을 보완할 수 있습니다.</p>
+      </div>
+
+      <section class="card result-card">
+        <div class="result-block">
+          <div class="list-head">
+            <h2>내 요청 목록 <span class="count-chip" id="result-count"></span></h2>
+            <div class="status-filter" id="status-filter">
+              <button type="button" class="status-filter-btn sf-all active" data-status="">전체</button>
+              <button type="button" class="status-filter-btn sf-review_requested" data-status="review_requested">검토 요청</button>
+              <button type="button" class="status-filter-btn sf-in_review" data-status="in_review">검토중</button>
+              <button type="button" class="status-filter-btn sf-supplement_requested" data-status="supplement_requested">보완 요청</button>
+              <button type="button" class="status-filter-btn sf-supplement_completed" data-status="supplement_completed">보완 완료</button>
+              <button type="button" class="status-filter-btn sf-completed" data-status="completed">검토 완료</button>
+            </div>
+          </div>
+          <div class="incident-col-head">
+            <span class="col-status" aria-hidden="true"></span>
+            <span>부서</span>
+            <span>사업장</span>
+            <span>내용</span>
+            <span>사고 날짜</span>
+            <span>요청 날짜</span>
+          </div>
+          <ul class="incident-list" id="incident-list">
+            <li class="empty-state">불러오는 중...</li>
+          </ul>
+        </div>
+      </section>
+{% endblock %}
+{% block scripts %}
+  <script src="/static/render.js?v={{ v }}"></script>
+  <script src="/static/results.js?v={{ v }}"></script>
+{% endblock %}

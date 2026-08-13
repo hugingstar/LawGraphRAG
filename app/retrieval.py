@@ -1,8 +1,10 @@
-"""하이브리드 검색: pgvector 코사인 유사도 + pg_trgm 키워드 유사도.
+"""하이브리드 검색: pgvector 코사인 유사도 + pg_trgm 키워드 유사도 + Neo4j 그래프 확장.
 
-두 결과를 Reciprocal Rank Fusion(RRF)으로 합쳐 순위를 매긴다.
-RRF는 점수 스케일이 다른 두 검색 방식(벡터 거리 vs 문자열 유사도)을
-정규화 없이 안정적으로 합칠 수 있어 하이브리드 검색에서 널리 쓰인다.
+벡터와 trigram 결과를 Reciprocal Rank Fusion(RRF)으로 합쳐 순위를 매긴 뒤(RRF는 점수 스케일이
+다른 두 검색 방식을 정규화 없이 안정적으로 합칠 수 있어 하이브리드 검색에서 널리 쓰인다),
+상위 조문을 시드로 그래프 확장(graph_expand)을 추가로 수행해 명시적으로 인용되거나 같은
+개념(의무주체/처벌 등)을 공유하는 조문을 보강한다. 그래프 확장은 항상 벡터+trigram 결과보다
+낮은 우선순위로 덧붙여지며, Neo4j가 죽어 있어도 기존 결과는 그대로 반환된다.
 """
 
 from dataclasses import dataclass
@@ -11,9 +13,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.embeddings import embed_queries
+from app.graph_retrieval import graph_expand
 from app.models import Article, ArticleChunk, Law
 
 RRF_K = 60
+GRAPH_SEED_COUNT = 3
+GRAPH_EXTRA_LIMIT = 4
 
 
 @dataclass
@@ -78,7 +83,37 @@ def hybrid_search(session: Session, query_text: str, top_k: int = 8, candidate_p
         results.append(
             RetrievedArticle(article=article, law=article.law, chunk_text=chunk.chunk_text, score=score)
         )
+
+    results.extend(_graph_expanded_results(session, results))
     return results
+
+
+def _graph_expanded_results(session: Session, seed_results: list[RetrievedArticle]) -> list[RetrievedArticle]:
+    """기존 벡터+trigram 결과보다 항상 낮은 점수로, 그래프상 관련 조문을 덧붙인다."""
+    if not seed_results:
+        return []
+
+    seed_articles = [r.article for r in seed_results[:GRAPH_SEED_COUNT]]
+    related_articles = graph_expand(session, seed_articles, limit=GRAPH_EXTRA_LIMIT)
+
+    seen_article_ids = {r.article.id for r in seed_results}
+    lowest_score = min(r.score for r in seed_results)
+
+    extra = []
+    for article in related_articles:
+        if article.id in seen_article_ids:
+            continue
+        seen_article_ids.add(article.id)
+        chunk_text = article.chunks[0].chunk_text if article.chunks else article.full_text[:500]
+        extra.append(
+            RetrievedArticle(
+                article=article,
+                law=article.law,
+                chunk_text=chunk_text,
+                score=lowest_score / 2,
+            )
+        )
+    return extra
 
 
 from typing import Any
@@ -87,7 +122,7 @@ from langchain_core.retrievers import BaseRetriever
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
 
-class HybridSafetyLawRetriever(BaseRetriever):
+class HybridLawOwlyRetriever(BaseRetriever):
     """LangChain BaseRetriever 구현체로, 내부적으로 기존 hybrid_search를 호출합니다."""
     session: Any = Field(exclude=True)
     top_k: int = 8

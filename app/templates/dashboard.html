@@ -1,0 +1,60 @@
+{% extends "_layout.html" %}
+{% block content %}
+      <div class="hero">
+        <h1>전사 사건 모니터링</h1>
+        <p class="hint">심층 검토 요청으로 접수된 전사 사건 현황을 사업장·부서별로 모니터링합니다.</p>
+      </div>
+
+      <section class="card range-card">
+        <div class="range-row">
+          <div class="field">
+            <label class="field-sublabel" for="start-date">집계 시작일</label>
+            <input class="text-input" type="date" id="start-date" value="{{ default_start }}">
+          </div>
+          <span class="range-sep">~</span>
+          <div class="field">
+            <label class="field-sublabel" for="end-date">집계 종료일</label>
+            <input class="text-input" type="date" id="end-date" value="{{ default_end }}">
+          </div>
+          <button id="apply-range">조회</button>
+          <button id="reset-range" class="btn-secondary">전체 기간</button>
+        </div>
+      </section>
+
+      <div class="stat-grid">
+        <div class="stat-card tone-total">
+          <div class="stat-label">전체 사건</div>
+          <div class="stat-value" id="stat-total">-</div>
+        </div>
+        <div class="stat-card tone-requested">
+          <div class="stat-label">검토 요청</div>
+          <div class="stat-value" id="stat-review_requested">-</div>
+        </div>
+        <div class="stat-card tone-inreview">
+          <div class="stat-label">검토중</div>
+          <div class="stat-value" id="stat-in_review">-</div>
+        </div>
+        <div class="stat-card tone-supplement">
+          <div class="stat-label">보완 요청</div>
+          <div class="stat-value" id="stat-supplement_requested">-</div>
+        </div>
+        <div class="stat-card tone-completed">
+          <div class="stat-label">검토 완료</div>
+          <div class="stat-value" id="stat-completed">-</div>
+        </div>
+      </div>
+
+      <h2 class="section-title">사업장별 사건 발생</h2>
+      <div class="site-grid" id="site-grid"></div>
+
+      <section class="card chart-card section-gap heatmap-card">
+        <h2>부서별 사건 발생 현황</h2>
+        <p class="hint side-note">사업장(가로) × 부서(세로)별 사건 건수입니다. 진할수록 건수가 많습니다.</p>
+        <div class="heatmap-scroll" id="dept-heatmap">
+          <p class="empty-state">불러오는 중...</p>
+        </div>
+      </section>
+{% endblock %}
+{% block scripts %}
+  <script src="/static/dashboard.js?v={{ v }}"></script>
+{% endblock %}

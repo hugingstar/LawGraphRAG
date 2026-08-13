@@ -1,0 +1,100 @@
+{% extends "_layout.html" %}
+{% block content %}
+      <div class="hero">
+        <h1>관리자 검토</h1>
+        <p class="hint">전체 사업장·전체 부서의 요청이 최신순으로 표시됩니다. 사업장·부서를 선택하거나 검색어로 범위를 좁힐 수 있습니다.</p>
+      </div>
+
+      <section class="card input-card">
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label" for="site-select">사업장</label>
+            <select id="site-select">
+              <option value="">전체 사업장</option>
+              {% for s in sites %}
+              <option value="{{ s.id }}" {{ "selected" if initial_site_id|string == s.id|string else "" }}>{{ s.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label" for="department-select">부서</label>
+            <select id="department-select">
+              <option value="">전체 부서</option>
+              {% for d in departments %}
+              <option value="{{ d.id }}" {{ "selected" if initial_department_id|string == d.id|string else "" }}>{{ d.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="field search-field">
+          <label class="field-label" for="search-input">통합 검색</label>
+          <div class="search-row">
+            <input class="text-input" type="search" id="search-input" placeholder="사고 내용, 장소, 작성자, 사업장, 부서, 검토 결과에서 검색">
+            <button id="search-btn">검색</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="review-split">
+        <section class="card result-card review-main">
+          <div class="result-block">
+            <div class="list-head">
+              <h2>사건 이력 <span class="count-chip" id="result-count"></span></h2>
+              <div class="status-filter" id="status-filter">
+                <button type="button" class="status-filter-btn sf-all active" data-status="">전체</button>
+                <button type="button" class="status-filter-btn sf-review_requested" data-status="review_requested">검토 요청</button>
+                <button type="button" class="status-filter-btn sf-in_review" data-status="in_review">검토중</button>
+                <button type="button" class="status-filter-btn sf-supplement_requested" data-status="supplement_requested">보완 요청</button>
+                <button type="button" class="status-filter-btn sf-supplement_completed" data-status="supplement_completed">보완 완료</button>
+                <button type="button" class="status-filter-btn sf-completed" data-status="completed">검토 완료</button>
+              </div>
+            </div>
+            <div class="incident-col-head">
+              <span class="col-status" aria-hidden="true"></span>
+              <span>부서</span>
+              <span>사업장</span>
+              <span>내용</span>
+              <span>사고 날짜</span>
+              <span>요청 날짜</span>
+            </div>
+            <ul class="incident-list" id="incident-list">
+              <li class="empty-state">불러오는 중...</li>
+            </ul>
+          </div>
+        </section>
+
+        <aside class="review-side">
+          <section class="card input-card side-tool">
+            <h2 class="card-title">Law Owly 직접 조회</h2>
+            <p class="hint side-note">참고용 조회입니다. 결과는 저장되지 않습니다.</p>
+            <label class="field-label" for="input-text">내용</label>
+            <textarea id="input-text" rows="6" placeholder="예) 지게차 작업 중 근로자가 넘어진 자재에 깔려 부상을 입었다..."></textarea>
+            <div class="action-row">
+              <button id="analyze-btn">
+                <span class="btn-spinner" aria-hidden="true"></span>
+                <span class="btn-label">분석하기</span>
+              </button>
+              <div id="status" role="status" aria-live="polite"></div>
+            </div>
+          </section>
+
+          <section id="result" class="card result-card side-tool" hidden>
+            <div class="result-block">
+              <h2>결과</h2>
+              <div id="highlighted-text"></div>
+            </div>
+            <div class="result-block">
+              <h2>인용 조문</h2>
+              <ul id="citation-list"></ul>
+            </div>
+          </section>
+        </aside>
+      </div>
+{% endblock %}
+{% block scripts %}
+  <script>window.CURRENT_USER_ID = {{ request.state.user.id }};</script>
+  <script src="/static/render.js?v={{ v }}"></script>
+  <script src="/static/app.js?v={{ v }}"></script>
+  <script src="/static/review.js?v={{ v }}"></script>
+{% endblock %}

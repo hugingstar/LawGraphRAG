@@ -1,0 +1,47 @@
+{% extends "_layout.html" %}
+{% block content %}
+      <div class="auth-wrap">
+        <div class="hero">
+          <h1>로그인</h1>
+          <p class="hint">Law Owly 심층 검토 시스템에 로그인하세요.</p>
+        </div>
+
+        <section class="card input-card">
+          <form method="post" action="/login">
+            <input type="hidden" name="next" value="{{ next or '/dashboard' }}">
+            {% if error %}
+            <p class="form-error">{{ error }}</p>
+            {% endif %}
+
+            <div class="field">
+              <label class="field-label" for="username">아이디</label>
+              <input class="text-input" type="text" id="username" name="username" value="{{ username or '' }}" required autofocus>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="password">비밀번호</label>
+              <input class="text-input" type="password" id="password" name="password" required>
+            </div>
+
+            <div class="action-row">
+              <button type="submit">로그인</button>
+            </div>
+          </form>
+        </section>
+
+        <p class="hint auth-alt">계정이 없으신가요? <a href="/signup">회원가입</a></p>
+
+        <section class="card demo-accounts">
+          <h2>테스트 계정</h2>
+          <ul>
+            <li><strong>신청자</strong> <code>user01</code> — 품질보증부 / 포항사업장</li>
+            <li><strong>신청자</strong> <code>user02</code> — 물류부 / 포항사업장 <span class="hint-inline">(user01과 같은 사업장, 다른 부서)</span></li>
+            <li><strong>신청자</strong> <code>user03</code> — 품질보증부 / 광양사업장 <span class="hint-inline">(user01과 다른 사업장, 같은 부서)</span></li>
+            <li><strong>신청자</strong> <code>user04</code> — 설비보전부 / 구미사업장 <span class="hint-inline">(user01과 다른 사업장, 다른 부서)</span></li>
+            <li><strong>안전부서 관리자</strong> <code>manager01</code> — 포항사업장</li>
+            <li><strong>안전부서 관리자</strong> <code>manager02</code> — 세종사업장</li>
+          </ul>
+          <p class="hint field-hint">모든 계정의 비밀번호는 <code>1111</code>입니다.</p>
+        </section>
+      </div>
+{% endblock %}

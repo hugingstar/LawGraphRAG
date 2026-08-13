@@ -1,0 +1,96 @@
+{% extends "_layout.html" %}
+{% block content %}
+      <div class="hero">
+        <h1>나의 요청</h1>
+        <p class="hint">Law Owly가 안전부서팀과 함께 심층 검토합니다. 검토가 필요한 내용을 말씀해주세요.</p>
+      </div>
+
+      {% if not profile_complete %}
+      <section class="card input-card">
+        <p class="form-error">계정에 소속 부서와 사업장이 등록되어 있지 않아 요청을 접수할 수 없습니다. 안전부서 관리자에게 프로필 등록을 요청하세요.</p>
+      </section>
+      {% else %}
+      <div class="request-split">
+        <section class="card input-card request-main">
+          <h2 class="card-title">사고 내용</h2>
+
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label" for="occurred-at">사고일시</label>
+              <input class="text-input" type="datetime-local" id="occurred-at">
+            </div>
+            <div class="field">
+              <label class="field-label" for="location">사고장소</label>
+              <input class="text-input" type="text" id="location" placeholder="예) 3공장 소성라인 B구역">
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="background">사고경위 <span class="required-mark">*</span></label>
+            <textarea id="background" rows="4" placeholder="어떤 작업 중 무슨 일이 일어났는지 시간 순서대로 적어주세요."></textarea>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="situation">당시상황</label>
+            <textarea id="situation" rows="3" placeholder="작업 환경, 안전조치 이행 여부, 현장 결함 등 사고 당시의 정황을 적어주세요."></textarea>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="action-taken">조치내용</label>
+            <textarea id="action-taken" rows="3" placeholder="사고 직후 보고·응급조치·이송 등 취한 조치를 적어주세요."></textarea>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="damage">피해상황</label>
+            <textarea id="damage" rows="3" placeholder="부상 부위와 진단 내용, 설비·물적 피해 등을 적어주세요."></textarea>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="attachments">관련 파일 첨부</label>
+            <input class="file-input" type="file" id="attachments" multiple accept=".pdf,.doc,.docx,.hwp,.hwpx,.xls,.xlsx,.jpg,.jpeg,.png">
+            <p class="hint field-hint">PDF, Word, 한글, 엑셀, 이미지 파일을 최대 5개까지 첨부할 수 있습니다 (개당 20MB 이하).</p>
+            <ul class="file-picked-list" id="file-picked-list"></ul>
+          </div>
+
+          <div class="action-row">
+            <button id="analyze-btn">
+              <span class="btn-spinner" aria-hidden="true"></span>
+              <span class="btn-label">심층 검토 요청</span>
+            </button>
+            <div id="status" role="status" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <aside class="request-side">
+          <section class="card profile-card">
+            <h2 class="card-title">요청자 정보</h2>
+            <p class="hint profile-note">로그인 계정에 등록된 정보가 자동으로 사용됩니다. 정보를 바꾸려면 <a href="/settings">설정</a>에서 직접 수정할 수 있습니다.</p>
+            <dl class="detail-grid profile-grid">
+              <dt>사업장</dt><dd>{{ profile.site or "미등록" }}</dd>
+              <dt>요청 부서</dt><dd>{{ profile.department or "미등록" }}</dd>
+              <dt>이름</dt><dd>{{ profile.name }}</dd>
+              <dt>직급</dt><dd>{{ profile.rank or "-" }}</dd>
+              <dt>연락처</dt><dd>{{ profile.contact or "-" }}</dd>
+            </dl>
+          </section>
+
+          <section id="result" class="card result-card" hidden>
+            <div class="result-block">
+              <h2>접수 완료</h2>
+              <p class="hint" id="result-meta"></p>
+              <div id="highlighted-text"></div>
+            </div>
+
+            <div class="result-block">
+              <h2>Law Owly 분석 결과 (인용 조문)</h2>
+              <ul id="citation-list"></ul>
+            </div>
+          </section>
+        </aside>
+      </div>
+      {% endif %}
+{% endblock %}
+{% block scripts %}
+  <script src="/static/render.js?v={{ v }}"></script>
+  <script src="/static/request.js?v={{ v }}"></script>
+{% endblock %}
