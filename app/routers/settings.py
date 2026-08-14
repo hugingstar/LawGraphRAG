@@ -6,6 +6,8 @@ from app.auth import SESSION_COOKIE, require_login, verify_password, hash_passwo
 from app.db import get_session
 from app.models import (
     OCCUPATIONS,
+    USER_ROLES,
+    USER_ROLE_LABELS,
     Incident,
     IncidentAttachment,
     IncidentComment,
@@ -34,6 +36,8 @@ def settings_page(
             "sido_list": sido_list(session),
             "sigungu_list": sigungu_list(session),
             "occupations": OCCUPATIONS,
+            "user_roles": USER_ROLES,
+            "user_role_labels": USER_ROLE_LABELS,
         },
     )
 
@@ -42,6 +46,7 @@ def settings_page(
 def update_settings(
     request: Request,
     display_name: str = Form(...),
+    role: str = Form(...),
     occupation: str = Form(""),
     contact: str = Form(""),
     sido_code: str = Form(""),
@@ -59,7 +64,8 @@ def update_settings(
     # 검증에 실패해도 입력값이 사라지지 않도록, 방금 제출한 값으로 화면을 다시 그린다.
     submitted = {
         "username": profile.username,
-        "role_label": profile.role_label,
+        "role": role,
+        "role_label": USER_ROLE_LABELS.get(role, role),
         "display_name": display_name,
         "occupation": occupation,
         "contact": contact,
@@ -77,6 +83,8 @@ def update_settings(
                 "sido_list": sidos,
                 "sigungu_list": sigungus,
                 "occupations": OCCUPATIONS,
+                "user_roles": USER_ROLES,
+                "user_role_labels": USER_ROLE_LABELS,
                 "error": message if is_error else None,
                 "success": message if not is_error else None,
             },
@@ -85,6 +93,8 @@ def update_settings(
 
     if not display_name.strip():
         return render("이름을 입력해 주세요.", True)
+    if role not in USER_ROLES:
+        return render("올바르지 않은 역할입니다.", True)
     if not contact.strip():
         return render("연락처를 입력해 주세요.", True)
     if occupation and occupation not in dict(OCCUPATIONS):
@@ -100,6 +110,7 @@ def update_settings(
         profile.password_hash = hash_password(new_password)
 
     profile.display_name = display_name.strip()
+    profile.role = role
     profile.occupation = occupation or None
     profile.contact = contact.strip()
     profile.sido_code = sido_code or None
@@ -132,6 +143,8 @@ def delete_account(
                 "sido_list": sido_list(session),
                 "sigungu_list": sigungu_list(session),
                 "occupations": OCCUPATIONS,
+                "user_roles": USER_ROLES,
+                "user_role_labels": USER_ROLE_LABELS,
                 "delete_error": "아이디가 일치하지 않습니다.",
             },
             status_code=400,
@@ -146,6 +159,8 @@ def delete_account(
                 "sido_list": sido_list(session),
                 "sigungu_list": sigungu_list(session),
                 "occupations": OCCUPATIONS,
+                "user_roles": USER_ROLES,
+                "user_role_labels": USER_ROLE_LABELS,
                 "delete_error": "비밀번호가 올바르지 않습니다.",
             },
             status_code=400,

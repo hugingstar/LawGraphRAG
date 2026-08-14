@@ -21,10 +21,15 @@
               <input class="text-input" type="text" id="username" value="{{ profile.username }}" disabled>
             </div>
             <div class="field">
-              <label class="field-label" for="role_label">역할</label>
-              <input class="text-input" type="text" id="role_label" value="{{ profile.role_label }}" disabled>
+              <label class="field-label" for="role">역할</label>
+              <select id="role" name="role">
+                {% for code in user_roles %}
+                <option value="{{ code }}" {{ "selected" if profile.role == code else "" }}>{{ user_role_labels[code] }}</option>
+                {% endfor %}
+              </select>
             </div>
           </div>
+          <p class="hint field-hint">신청자는 본인이 올린 요청만, 검토 담당자는 전국 사건을 검토할 수 있습니다.</p>
 
           <div class="field">
             <label class="field-label" for="display_name">이름</label>
