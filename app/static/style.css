@@ -1569,8 +1569,13 @@ select:focus-visible {
   font-size: 0.82rem;
 }
 
-.profile-grid {
-  grid-template-columns: 6.5rem 1fr;
+/* .detail-grid.profile-grid로 묶어 특이성을 올린다 — 아래 .detail-grid가 소스 순서상
+   나중에 나와 gap:0.5rem 1rem으로 이 값을 그냥 덮어썼었다(같은 특이성이면 나중 규칙이 이김). */
+.detail-grid.profile-grid {
+  /* "활동 지역"처럼 4~5자짜리 라벨 기준으로 좁혔다 — 예전 6.5rem 고정폭은 "이름"·"직종" 같은
+     짧은 라벨 뒤에 실제 값과 상관없는 빈 여백을 만들어 라벨과 값이 멀어 보였다. */
+  grid-template-columns: minmax(4.4rem, auto) 1fr;
+  gap: 0.35rem 0.5rem;
 }
 
 @media (max-width: 900px) {
@@ -1626,21 +1631,19 @@ select:focus-visible {
   overflow: hidden;
 }
 
-/* 목록 헤더(부서/사업장/내용/사고 날짜/요청 날짜)와 각 행이 같은 그리드를 써서 열이 정확히 맞는다 */
+/* 목록 헤더(사건유형/지역/내용/사고 날짜/요청 날짜)와 각 행이 같은 그리드를 써서 열이 정확히 맞는다.
+   지역명이 "전남광주통합특별시 완도군"처럼 길어질 수 있어(광주·전남 통합), 각 열의 최대 너비를
+   auto(내용에 맞춰 무한정 확장)가 아니라 명시적 rem 값으로 못박는다 — 안 그러면 긴 지역명이 열을
+   밀어내면서 정작 가장 중요한 "내용" 열(1fr)의 공간을 다 빼앗아 아무것도 안 보이게 된다. */
 .incident-summary,
 .incident-col-head {
   display: grid;
-  grid-template-columns: 4.75rem minmax(6.5rem, auto) minmax(5.5rem, auto) 1fr 6rem 6rem;
+  grid-template-columns: 4.5rem 5.5rem minmax(7rem, 9.5rem) minmax(0, 1fr) 5rem 5rem;
   gap: 0.6rem;
-  align-items: center;
-}
-
-.incident-summary {
-  padding: 0.9rem 1rem;
-  cursor: pointer;
 }
 
 .incident-col-head {
+  align-items: center;
   padding: 0 1rem;
   margin-bottom: 0.5rem;
   font-size: 0.74rem;
@@ -1648,27 +1651,41 @@ select:focus-visible {
   color: var(--muted);
 }
 
+.incident-summary {
+  align-items: start;
+  padding: 0.9rem 1rem;
+  cursor: pointer;
+}
+
 .incident-summary .incident-dept {
   font-weight: 700;
-  font-size: 0.92rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 0.88rem;
+  line-height: 1.3;
+  overflow-wrap: break-word;
+  word-break: keep-all;
 }
 
 .incident-summary .incident-date {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.76rem;
+  line-height: 1.3;
   text-align: right;
+  overflow-wrap: break-word;
 }
 
 .incident-summary .incident-excerpt {
   min-width: 0;
   color: var(--fg-soft);
   font-size: 0.86rem;
+  line-height: 1.35;
+  overflow-wrap: break-word;
+  word-break: keep-all;
+  /* 한 줄로 자르지 않고 최대 2줄까지 보여준 뒤에만 말줄임 — 내용이 아예 안 보이는 것보다는
+     두 줄이라도 실제 내용이 보이는 편이 낫다. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .incident-detail {
@@ -1827,12 +1844,16 @@ select:focus-visible {
   color: var(--accent);
   background: var(--accent-soft);
   padding: 0.15rem 0.5rem;
-  border-radius: 999px;
+  border-radius: 0.6rem;
+  /* width: fit-content + nowrap이었던 예전 배지 스타일은 지역명이 길어지자(광주·전남 통합
+     등) 그 길이만큼 열 전체를 밀어내는 원인이었다. 짧은 이름은 여전히 내용만큼만 좁게,
+     칸보다 넓어지면 그 안에서 최대 2줄까지 줄바꿈한다. */
   width: fit-content;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   max-width: 100%;
+  line-height: 1.3;
+  overflow-wrap: break-word;
+  word-break: keep-all;
+  white-space: normal;
 }
 
 /* ---- 사건 이력 헤더: 제목 + 상태 필터 버튼 ---- */
