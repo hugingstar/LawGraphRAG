@@ -2,14 +2,14 @@
 {% import "_macros.html" as macros %}
 {% block content %}
       <div class="hero">
-        <h1>Advisor</h1>
-        <p class="hint">사고 상황을 서술한 글을 입력하면, 적용되는 조문을 찾아 표시됩니다. 조회 결과는 저장되지 않습니다.</p>
+        <h1>법부엉이</h1>
+        <p class="hint">상황을 서술한 글을 입력하면, 적용되는 조문을 찾아 표시됩니다. 조회 결과는 저장되지 않습니다.</p>
       </div>
 
       <div class="lookup-split">
         <section class="card input-card lookup-input">
           <label class="field-label" for="input-text">내용</label>
-          <textarea id="input-text" rows="14" placeholder="예) 지게차 작업 중 근로자가 넘어진 자재에 깔려 부상을 입었다..."></textarea>
+          <textarea id="input-text" rows="14" placeholder="예) 마트 주차장에서 후진하던 차량에 부딪혀 다쳤다..."></textarea>
 
           <div class="action-row">
             <button id="analyze-btn">
@@ -46,13 +46,9 @@
       <div class="write-example">
         <p class="write-example-label">작성 예시</p>
         <p class="write-example-text">
-          2026년 8월 12일 오전 9시경, 포항 2공장 천장크레인 작업구역에서 크레인으로 코일을 이송하던 중
-          줄걸이 와이어로프가 끊어지면서 코일이 바닥으로 떨어졌습니다. 사고 당시 와이어로프에 대한
-          육안점검 기록이 3개월간 남아 있지 않았고, 낙하 위험구역에도 출입 통제가 되어 있지 않은
-          상태였습니다. 사고 직후 크레인 운전을 즉시 멈추고 해당 구역을 통제한 뒤 관리감독자에게
-          보고했으며, 다행히 인명 피해는 없었지만 코일 2본이 변형되는 물적 피해가 발생했습니다.
-          이렇게 사고일시·사고장소·사고경위·당시상황·조치내용·피해상황이 이야기하듯 자연스럽게
-          이어지도록 적어주시면 더 정확하게 분석됩니다.
+          2026년 8월 12일 오후 3시경, 동네 마트 주차장에서 후진하던 차량에 부딪혀 발목을 다쳤습니다.
+          사고 직후 매장 관리자에게 알렸고, 병원에서 인대 손상 진단을 받았습니다. 이렇게 언제·어디서·
+          무슨 일이 있었는지 자연스럽게 이어지도록 적어주시면 더 정확하게 분석됩니다.
         </p>
       </div>
 {% endblock %}

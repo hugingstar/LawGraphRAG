@@ -186,7 +186,7 @@ class Incident(Base):
     reporter_info: Mapped[str | None] = mapped_column(Text)  # (구버전) 통합 인적사항
     occurred_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True))  # 사고일시
     location: Mapped[str | None] = mapped_column(Text)  # 사고장소
-    background: Mapped[str | None] = mapped_column(Text)  # 사고경위
+    background: Mapped[str | None] = mapped_column(Text)  # 경위
     situation: Mapped[str | None] = mapped_column(Text)  # 당시상황
     action_taken: Mapped[str | None] = mapped_column(Text)  # 조치내용
     damage: Mapped[str | None] = mapped_column(Text)  # 피해상황

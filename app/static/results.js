@@ -11,7 +11,7 @@ const STATUS_GUIDE = {
   completed: "검토가 완료되었습니다. 추가로 궁금한 점은 아래에서 문의할 수 있습니다.",
 };
 
-// 처음 작성했던 틀(사고일시/사고장소/사고경위/당시상황/조치내용/피해상황)을 그대로 유지한 채
+// 처음 작성했던 틀(사고일시/사고장소/경위/당시상황/조치내용/피해상황)을 그대로 유지한 채
 // 값만 고쳐 쓸 수 있게 한다. datetime-local은 시간대 변환 없이 저장된 그대로의 숫자를 쓴다
 // (작성 시에도 브라우저가 입력한 숫자를 그대로 보냈으므로 대칭적으로 맞춘다).
 function renderEditForm(incident) {
@@ -28,7 +28,7 @@ function renderEditForm(incident) {
       </div>
     </div>
     <div class="field">
-      <label class="field-label">사고경위 <span class="required-mark">*</span></label>
+      <label class="field-label">경위 <span class="required-mark">*</span></label>
       <textarea data-role="edit-background" rows="4">${escapeHtml(incident.background || "")}</textarea>
     </div>
     <div class="field">
@@ -164,7 +164,7 @@ function paintDetail(item, incident, editing = false) {
         damage: detail.querySelector('[data-role="edit-damage"]').value.trim(),
       };
       if (!fields.background) {
-        statusEl.textContent = "사고경위는 반드시 입력해야 합니다.";
+        statusEl.textContent = "경위는 반드시 입력해야 합니다.";
         return;
       }
       saveBtn.disabled = true;

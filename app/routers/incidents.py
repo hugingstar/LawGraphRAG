@@ -107,7 +107,7 @@ def _compose_statement(
         ("작성자 인적사항", reporter_summary),
         ("사고일시", occurred_at.strftime("%Y-%m-%d %H:%M") if occurred_at else ""),
         ("사고장소", location),
-        ("사고경위", background),
+        ("경위", background),
         ("당시상황", situation),
         ("조치내용", action_taken),
         ("피해상황", damage),
@@ -169,7 +169,7 @@ def create_incident(
     # 어디서든 신고할 수 있어야 하므로 폼 값을 쓰되, 아래에서 실재하는 지역인지 검증한다.
     profile = session.get(User, user.id)
     if not background.strip():
-        raise HTTPException(status_code=400, detail="사고경위는 반드시 입력해야 합니다.")
+        raise HTTPException(status_code=400, detail="경위는 반드시 입력해야 합니다.")
 
     region, category = _resolve_region_and_category(session, sido_code, sigungu_code, category_id)
 
@@ -303,7 +303,7 @@ def edit_incident(
     if incident.status == "completed":
         raise HTTPException(status_code=400, detail="검토가 완료된 요청은 수정할 수 없습니다.")
     if not background.strip():
-        raise HTTPException(status_code=400, detail="사고경위는 반드시 입력해야 합니다.")
+        raise HTTPException(status_code=400, detail="경위는 반드시 입력해야 합니다.")
 
     occurred = _parse_occurred_at(occurred_at)
     statement = _compose_statement(

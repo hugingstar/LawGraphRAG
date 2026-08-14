@@ -97,7 +97,7 @@ function renderRequestDetail(incident) {
     ["작성자", incident.reporter_summary],
     ["사고일시", incident.occurred_at ? formatDateTime(incident.occurred_at) : ""],
     ["사고장소", incident.location],
-    ["사고경위", incident.background],
+    ["경위", incident.background],
     ["당시상황", incident.situation],
     ["조치내용", incident.action_taken],
     ["피해상황", incident.damage],

@@ -50,7 +50,7 @@ analyzeBtn.addEventListener("click", async () => {
 
   if (!background) {
     statusEl.classList.add("status-error");
-    statusEl.textContent = "사고경위는 반드시 입력해야 합니다.";
+    statusEl.textContent = "경위는 반드시 입력해야 합니다.";
     document.getElementById("background").focus();
     return;
   }
