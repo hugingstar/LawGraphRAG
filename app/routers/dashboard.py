@@ -53,6 +53,27 @@ def _date_bounds(start: str | None, end: str | None):
     return start_dt, end_dt
 
 
+def _top_category_per_region(session: Session, scoped, region_column) -> dict[str, tuple[str, int]]:
+    """지역코드 -> (가장 많은 사건유형 이름, 그 건수). "사건 많은 지역" 순위에서 각 지역 옆에
+    같이 보여주기 위한 것이라, 사건이 0건인 지역은 애초에 결과에 없어도 된다(호출부에서
+    .get(code, (None, 0))으로 처리한다)."""
+    rows = scoped(
+        session.query(region_column, IncidentCategory.name, func.count(Incident.id))
+        .outerjoin(IncidentCategory, Incident.category_id == IncidentCategory.id)
+        .group_by(region_column, IncidentCategory.name)
+    ).all()
+
+    best: dict[str, tuple[str, int]] = {}
+    for region_code, category_name, count in rows:
+        if region_code is None or count == 0:
+            continue
+        label = category_name or "미분류"
+        current = best.get(region_code)
+        if current is None or count > current[1]:
+            best[region_code] = (label, count)
+    return best
+
+
 @router.get("/api/dashboard/stats")
 def dashboard_stats(
     start: str | None = None,
@@ -123,13 +144,29 @@ def dashboard_stats(
         .group_by(Incident.sido_code, Incident.category_id)
     ).all()
 
+    top_category_by_sido = _top_category_per_region(session, scoped, Incident.sido_code)
+    top_category_by_sigungu = _top_category_per_region(session, scoped, Incident.sigungu_code)
+
+    def _with_top_category(code: str, top_by_region: dict) -> dict:
+        name, count = top_by_region.get(code, (None, 0))
+        return {"top_category": name, "top_category_count": count}
+
     return {
         "total": total,
         "status_counts": status_counts,
         "status_labels": INCIDENT_STATUS_LABELS,
-        "by_sido": [{"code": code, "name": name, "count": count} for code, name, count in sido_rows],
+        "by_sido": [
+            {"code": code, "name": name, "count": count, **_with_top_category(code, top_category_by_sido)}
+            for code, name, count in sido_rows
+        ],
         "by_sigungu": [
-            {"code": code, "name": name, "parent_code": parent, "count": count}
+            {
+                "code": code,
+                "name": name,
+                "parent_code": parent,
+                "count": count,
+                **_with_top_category(code, top_category_by_sigungu),
+            }
             for code, name, parent, count in sigungu_rows
         ],
         "by_category": [

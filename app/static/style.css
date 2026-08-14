@@ -1069,8 +1069,6 @@ select:focus-visible {
 .region-rank li {
   counter-increment: rank;
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
   gap: 0.5rem;
   padding: 0.45rem 0;
   border-bottom: 1px solid var(--border);
@@ -1080,20 +1078,49 @@ select:focus-visible {
 .region-rank li::before {
   content: counter(rank);
   flex: 0 0 1.3rem;
+  padding-top: 0.1rem;
   color: var(--muted);
   font-weight: 700;
   font-size: 0.8rem;
 }
 
-.region-rank .rank-name {
+/* 지역명+전체건수 한 줄, 그 밑에 최다 사건유형을 작게 붙인다(2번째 줄). 사이드 컬럼 폭이
+   16rem뿐이라 지역명이 길면(예: "전남광주통합특별시 완도군") 한 줄에 다 못 넣으므로,
+   이름과 최다유형 모두 자체 줄에서 말줄임으로 넘치지 않게 막는다. */
+.region-rank li > div {
+  min-width: 0;
   flex: 1;
+}
+
+.rank-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.region-rank .rank-name {
+  min-width: 0;
   color: var(--fg-soft);
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .region-rank .rank-count {
+  flex: 0 0 auto;
   color: var(--accent-hover);
   font-weight: 700;
+}
+
+.rank-sub {
+  margin-top: 0.1rem;
+  color: var(--muted);
+  font-size: 0.74rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---- 사건 유형 막대 ---- */

@@ -50,11 +50,21 @@ function renderRank(rows, labelFor) {
     el.innerHTML = '<li class="empty-state">해당 기간에 접수된 사건이 없습니다.</li>';
     return;
   }
+  // 지역명 아래 작은 글씨로 그 지역에서 가장 많은 사건 유형과 건수를 덧붙인다. 폭이 16rem뿐인
+  // 사이드 컬럼이라 한 줄에 다 넣으면 넘치므로 2번째 줄로 내리고, 둘 다 말줄임으로 막는다.
   el.innerHTML = top
-    .map(
-      (r) => `<li><span class="rank-name">${escapeHtml(labelFor(r))}</span>
-        <span class="rank-count">${r.count}건</span></li>`
-    )
+    .map((r) => {
+      const sub = r.top_category
+        ? `<div class="rank-sub">최다유형 · ${escapeHtml(r.top_category)} ${r.top_category_count}건</div>`
+        : "";
+      return `<li>
+        <div class="rank-row">
+          <span class="rank-name">${escapeHtml(labelFor(r))}</span>
+          <span class="rank-count">${r.count}건</span>
+        </div>
+        ${sub}
+      </li>`;
+    })
     .join("");
 }
 
