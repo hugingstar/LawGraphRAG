@@ -10,7 +10,7 @@ from app.annotate import annotate_text, annotate_text_stream, citation_to_dict
 from app.auth import SESSION_COOKIE, require_login, user_for_token
 from app.db import SessionLocal, engine, get_session
 from app.migrate import finalize_migration, run_migrations
-from app.models import Base, User
+from app.models import Base, Law, User
 from app.regions_seed import seed_regions
 from app.seed import seed_reference_data
 from app.templating import templates
@@ -91,9 +91,22 @@ def on_startup():
 
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request, user: User = Depends(require_login)):
+def index(
+    request: Request,
+    user: User = Depends(require_login),
+    session: Session = Depends(get_session),
+):
+    # TARGET_LAWS(app/ingest.py)에 적어둔 목표 목록이 아니라, 실제로 수집이 끝나 검색
+    # 가능한 법령만 보여준다 — 목표만 적어두면 아직 못 넣은 법이 "이용 가능"으로 보인다.
+    available_laws = session.query(Law.law_name).order_by(Law.law_name).all()
     return templates.TemplateResponse(
-        "index.html", {"request": request, "active": "lookup", "wide": True}
+        "index.html",
+        {
+            "request": request,
+            "active": "lookup",
+            "wide": True,
+            "available_laws": [name for (name,) in available_laws],
+        },
     )
 
 

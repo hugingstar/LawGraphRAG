@@ -1328,13 +1328,14 @@ select:focus-visible {
 
 .lookup-split {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr minmax(180px, 220px);
   gap: 1.25rem;
   align-items: start;
 }
 
 .lookup-input,
-.lookup-output {
+.lookup-output,
+.lookup-laws {
   min-width: 0;
 }
 
@@ -1342,7 +1343,8 @@ select:focus-visible {
   height: 100%;
 }
 
-.lookup-output {
+.lookup-output,
+.lookup-laws {
   position: sticky;
   top: 1rem;
 }
@@ -1354,12 +1356,59 @@ select:focus-visible {
   min-height: 220px;
 }
 
+.law-list-card .law-list-hint {
+  margin: 0 0 0.75rem;
+}
+
+.law-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.law-list li {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--fg-soft);
+  line-height: 1.4;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+@media (max-width: 1100px) {
+  .lookup-split {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .lookup-laws {
+    grid-column: 1 / -1;
+    position: static;
+  }
+
+  .law-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .law-list li {
+    flex: 0 0 auto;
+  }
+}
+
 @media (max-width: 900px) {
   .lookup-split {
     grid-template-columns: 1fr;
   }
 
-  .lookup-output {
+  .lookup-output,
+  .lookup-laws {
     position: static;
   }
 }
