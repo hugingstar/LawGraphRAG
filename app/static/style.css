@@ -159,7 +159,8 @@ main {
 }
 
 main.wide {
-  max-width: 1080px;
+  /* 1080px는 "법부엉이 검토" 등에서 상태 필터 버튼·검색창·목록 열이 자주 줄바꿈됐다. */
+  max-width: 1280px;
 }
 
 .hero {
@@ -1135,6 +1136,7 @@ select:focus-visible {
   border-radius: 999px;
   font-size: 0.78rem;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .status-badge.status-review_requested {
@@ -1638,7 +1640,10 @@ select:focus-visible {
 .incident-summary,
 .incident-col-head {
   display: grid;
-  grid-template-columns: 4.5rem 5.5rem minmax(7rem, 9.5rem) minmax(0, 1fr) 5rem 5rem;
+  /* 상태 뱃지("검토 요청"/"보완 완료" 등 4자+공백)가 줄바꿈되지 않도록 첫 열은 그 폭에
+     맞춰 5.5rem으로 고정한다. 지역 열은 max를 9.5rem에서 8rem으로 낮췄다 — 짧은 지역명이
+     줄바꿈된 긴 이름 기준의 넓은 칸 안에서 오른쪽에 빈 여백만 남기던 것을 줄이기 위함이다. */
+  grid-template-columns: 5.5rem 5.5rem minmax(6.5rem, 8rem) minmax(0, 1fr) 5rem 5rem;
   gap: 0.6rem;
 }
 
@@ -1842,14 +1847,11 @@ select:focus-visible {
   font-size: 0.78rem;
   font-weight: 600;
   color: var(--accent);
-  background: var(--accent-soft);
-  padding: 0.15rem 0.5rem;
-  border-radius: 0.6rem;
-  /* width: fit-content + nowrap이었던 예전 배지 스타일은 지역명이 길어지자(광주·전남 통합
-     등) 그 길이만큼 열 전체를 밀어내는 원인이었다. 짧은 이름은 여전히 내용만큼만 좁게,
-     칸보다 넓어지면 그 안에서 최대 2줄까지 줄바꿈한다. */
-  width: fit-content;
-  max-width: 100%;
+  /* 예전엔 배경이 있는 "알약" 배지였다. width:fit-content는 줄바꿈 전 전체 텍스트 폭을
+     기준으로 계산되기 때문에, "경상북도"/"포항시남구"처럼 두 줄 길이가 다르면 짧은 줄
+     오른쪽에 배경색만 남는 빈 공간이 생겼다(배지 폭은 긴 줄 기준으로 고정되므로). 배경을
+     없애 색 있는 텍스트로만 표시하면 그 빈 공간이 애초에 보이지 않는다.
+     안 그래도 열이 좁아 밀어내던 문제가 있었으므로 폭 관련 속성은 아예 두지 않는다. */
   line-height: 1.3;
   overflow-wrap: break-word;
   word-break: keep-all;
@@ -2219,7 +2221,7 @@ details.tool-drawer > summary {
   }
 
   .incident-summary {
-    grid-template-columns: 4.5rem 1fr;
+    grid-template-columns: 5.5rem 1fr;
   }
 
   .incident-summary .incident-date {
