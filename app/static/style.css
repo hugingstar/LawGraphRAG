@@ -105,6 +105,7 @@ a.brand:focus-visible {
 .topnav {
   max-width: none;
   display: flex;
+  justify-content: center;
   gap: 0.25rem;
   padding: 0 1rem;
   margin-top: 0.75rem;
@@ -416,12 +417,25 @@ mark:hover {
 /* ---- 상단바 사용자 영역 ---- */
 
 .topbar-row {
-  display: flex;
+  /* 좌우 폭이 같은 3열(1fr auto 1fr)로 둬서, 오른쪽 user-chip 유무나 너비와 무관하게
+     가운데 열의 브랜드가 화면 정중앙에 오도록 한다. space-between(2열 flex)이었을 때는
+     user-chip이 있을 때만 브랜드가 왼쪽으로 밀렸었다. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 0.75rem;
-  padding-right: 1.25rem;
-  flex-wrap: wrap;
+  padding: 0 1.25rem;
+}
+
+.topbar-row > .brand {
+  grid-column: 2;
+  justify-self: center;
+  margin: 0;
+}
+
+.topbar-row > .user-chip {
+  grid-column: 3;
+  justify-self: end;
 }
 
 .user-chip {
