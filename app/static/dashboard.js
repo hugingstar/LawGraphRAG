@@ -2,6 +2,17 @@ function escapeHtml(str) {
   return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// 광주·전남 행정통합(2026-07-01). 경계 파일은 2018년 스냅샷이라 광주광역시(24)·전라남도(36)가
+// 아직 따로 그려져 있다 — 구·시·군 모양 자체는 안 바뀌었으므로 도형을 새로 그리는 대신, 두 시도
+// 코드를 통합 코드 하나로 묶어서 칠한다(app/regions_seed.py의 _SIDO_MERGES와 대응).
+const SIDO_MERGES = { "36": "24" };
+const MERGED_SIDO_NAMES = { "24": "전남광주통합특별시" };
+
+function sidoPrefixOf(code) {
+  const prefix = code.slice(0, 2);
+  return SIDO_MERGES[prefix] || prefix;
+}
+
 // 경계 파일은 한 번만 받아 재사용한다(합쳐서 ~770KB이므로 기간을 바꿀 때마다 다시 받을 이유가 없다).
 let sidoFeatures = null;
 let sigunguFeatures = null;
@@ -19,7 +30,10 @@ async function loadGeo() {
     fetch("/static/geo/sido.topo.json").then((r) => r.json()),
     fetch("/static/geo/sigungu.topo.json").then((r) => r.json()),
   ]);
-  sidoFeatures = decodeTopology(sido, "skorea_provinces_2018_geo");
+  sidoFeatures = decodeTopology(sido, "skorea_provinces_2018_geo").map((f) => {
+    const mergedCode = SIDO_MERGES[f.code] || f.code;
+    return { ...f, code: mergedCode, name: MERGED_SIDO_NAMES[mergedCode] || f.name };
+  });
   sigunguFeatures = decodeTopology(sigungu, "skorea_municipalities_2018_geo");
 }
 
@@ -77,8 +91,9 @@ function paintMap() {
     });
     renderRank(latestStats.by_sido, (r) => r.name);
   } else {
-    // 시군구 코드 앞 2자리가 소속 시도다. 선택한 시도의 시군구만 그린다.
-    const features = sigunguFeatures.filter((f) => f.code.slice(0, 2) === drilledSido);
+    // 시군구 코드 앞 2자리가 소속 시도다(통합된 시도는 sidoPrefixOf가 통합 코드로 바꿔준다).
+    // 선택한 시도의 시군구만 그린다.
+    const features = sigunguFeatures.filter((f) => sidoPrefixOf(f.code) === drilledSido);
     const rows = latestStats.by_sigungu.filter((r) => r.parent_code === drilledSido);
     const sidoName = (latestStats.by_sido.find((s) => s.code === drilledSido) || {}).name || "";
 

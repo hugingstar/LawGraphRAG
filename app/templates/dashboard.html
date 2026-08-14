@@ -1,10 +1,13 @@
 {% extends "_layout.html" %}
+{% import "_macros.html" as macros %}
 {% block content %}
       <div class="hero">
         <h1>전국 사건 모니터링</h1>
         <p class="hint">접수된 사건을 지역별로 모니터링합니다. 지도에서 시·도를 클릭하면 시·군·구까지 볼 수 있습니다.</p>
       </div>
 
+      <div class="dashboard-split">
+      <div class="dashboard-main">
       <section class="card range-card">
         <div class="range-row">
           <div class="field">
@@ -66,6 +69,12 @@
         <p class="hint side-note">선택한 지역 범위의 사건 유형 분포입니다.</p>
         <div id="category-bars"></div>
       </section>
+      </div>
+
+      <aside class="dashboard-laws">
+        {{ macros.law_list_card(available_laws) }}
+      </aside>
+      </div>
 {% endblock %}
 {% block scripts %}
   <script src="/static/topo.js?v={{ v }}"></script>

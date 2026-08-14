@@ -1328,7 +1328,7 @@ select:focus-visible {
 
 .lookup-split {
   display: grid;
-  grid-template-columns: 1fr 1fr minmax(180px, 220px);
+  grid-template-columns: 1fr 1fr minmax(230px, 280px);
   gap: 1.25rem;
   align-items: start;
 }
@@ -1382,6 +1382,25 @@ select:focus-visible {
   overflow-wrap: break-word;
 }
 
+/* ---- 나의 요청 / 대시보드에서 쓰는 "이용 가능한 법 리스트" 우측 배치 ---- */
+
+.dashboard-split {
+  display: grid;
+  grid-template-columns: 1fr minmax(230px, 280px);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.dashboard-main {
+  min-width: 0;
+}
+
+.dashboard-laws {
+  min-width: 0;
+  position: sticky;
+  top: 1rem;
+}
+
 @media (max-width: 1100px) {
   .lookup-split {
     grid-template-columns: 1fr 1fr;
@@ -1389,6 +1408,14 @@ select:focus-visible {
 
   .lookup-laws {
     grid-column: 1 / -1;
+    position: static;
+  }
+
+  .dashboard-split {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-laws {
     position: static;
   }
 

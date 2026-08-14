@@ -11,6 +11,7 @@ from app.annotate import annotate_text, citation_to_dict
 from app.auth import require_login, require_manager
 from app.db import get_session
 from app.graph_incidents import sync_incident
+from app.law_catalog import available_law_names
 from app.models import (
     COMMENT_KIND_LABELS,
     COMMENT_KINDS,
@@ -65,6 +66,7 @@ def request_page(
             "sido_list": sido_list(session),
             "sigungu_list": sigungu_list(session),
             "categories": session.query(IncidentCategory).order_by(IncidentCategory.id).all(),
+            "available_laws": available_law_names(session),
             "wide": True,
         },
     )

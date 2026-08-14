@@ -1,4 +1,5 @@
 {% extends "_layout.html" %}
+{% import "_macros.html" as macros %}
 {% block content %}
       <div class="hero">
         <h1>Advisor</h1>
@@ -38,19 +39,7 @@
         </section>
 
         <aside class="lookup-laws">
-          <section class="card law-list-card">
-            <h2 class="card-title">지금 이용 가능한 법 리스트</h2>
-            <p class="hint law-list-hint">현재 검색 대상으로 수집되어 있는 법령입니다.</p>
-            {% if available_laws %}
-            <ul class="law-list">
-              {% for name in available_laws %}
-              <li>{{ name }}</li>
-              {% endfor %}
-            </ul>
-            {% else %}
-            <p class="empty-state">아직 수집된 법령이 없습니다.</p>
-            {% endif %}
-          </section>
+          {{ macros.law_list_card(available_laws) }}
         </aside>
       </div>
 

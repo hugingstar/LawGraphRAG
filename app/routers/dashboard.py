@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import require_manager
 from app.db import get_session
+from app.law_catalog import available_law_names
 from app.models import INCIDENT_STATUS_LABELS, Incident, IncidentCategory, Region, User
 from app.templating import templates
 
@@ -14,7 +15,11 @@ router = APIRouter()
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
-def dashboard_page(request: Request, user: User = Depends(require_manager)):
+def dashboard_page(
+    request: Request,
+    user: User = Depends(require_manager),
+    session: Session = Depends(get_session),
+):
     today = datetime.date.today()
     return templates.TemplateResponse(
         "dashboard.html",
@@ -24,6 +29,7 @@ def dashboard_page(request: Request, user: User = Depends(require_manager)):
             "wide": True,
             "default_start": (today - datetime.timedelta(days=30)).isoformat(),
             "default_end": today.isoformat(),
+            "available_laws": available_law_names(session),
         },
     )
 
