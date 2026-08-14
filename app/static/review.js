@@ -1,6 +1,7 @@
 const listEl = document.getElementById("incident-list");
-const siteSelect = document.getElementById("site-select");
-const departmentSelect = document.getElementById("department-select");
+const sidoSelect = document.getElementById("sido_code");
+const sigunguSelect = document.getElementById("sigungu_code");
+const categorySelect = document.getElementById("category-select");
 const searchInput = document.getElementById("search-input");
 const searchBtn = document.getElementById("search-btn");
 const countEl = document.getElementById("result-count");
@@ -346,8 +347,8 @@ function renderIncidentList(incidents) {
     <li class="incident-item" data-id="${i.id}">
       <div class="incident-summary">
         <span class="col-status">${statusBadge(i.status)}</span>
-        <span class="incident-dept">${escapeHtml(i.department)}</span>
-        <span class="incident-site-tag">${escapeHtml(i.site)}</span>
+        <span class="incident-dept">${escapeHtml(i.category || "미분류")}</span>
+        <span class="incident-site-tag">${escapeHtml(i.region || "지역 미상")}</span>
         <span class="incident-excerpt">${escapeHtml(contentLabel(i))}</span>
         <span class="incident-date" title="사고일시: ${i.occurred_at ? formatDateTime(i.occurred_at) : "미기재"}">${formatDate(i.occurred_at)}</span>
         <span class="incident-date" title="요청일시: ${formatDateTime(i.created_at)}">${formatDate(i.created_at)}</span>
@@ -372,8 +373,9 @@ function renderIncidentList(incidents) {
 
 function buildParams() {
   const params = new URLSearchParams();
-  if (siteSelect.value) params.set("site_id", siteSelect.value);
-  if (departmentSelect.value) params.set("department_id", departmentSelect.value);
+  if (sidoSelect.value) params.set("sido_code", sidoSelect.value);
+  if (sigunguSelect.value) params.set("sigungu_code", sigunguSelect.value);
+  if (categorySelect.value) params.set("category_id", categorySelect.value);
   if (activeStatusFilter) params.set("status", activeStatusFilter);
   const keyword = searchInput.value.trim();
   if (keyword) params.set("q", keyword);
@@ -398,8 +400,11 @@ async function loadIncidents() {
   renderIncidentList(incidents);
 }
 
-siteSelect.addEventListener("change", loadIncidents);
-departmentSelect.addEventListener("change", loadIncidents);
+// 시도를 바꾸면 regions.js가 시군구 목록을 다시 채우므로, 그 뒤에 목록을 새로 불러오도록
+// 이벤트 순서에 기대지 않고 두 셀렉트 모두에 리스너를 건다.
+sidoSelect.addEventListener("change", loadIncidents);
+sigunguSelect.addEventListener("change", loadIncidents);
+categorySelect.addEventListener("change", loadIncidents);
 searchBtn.addEventListener("click", loadIncidents);
 searchInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") loadIncidents();

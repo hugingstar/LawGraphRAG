@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS articles (
     title           TEXT,                       -- 조 제목
     full_text       TEXT NOT NULL,              -- 조문 원문 전체
     effective_date  DATE,
+    content_hash    TEXT,                       -- full_text 해시. 같으면 재임베딩을 건너뛴다
+    graph_synced_at TIMESTAMPTZ,                -- 그래프 추출(LLM) 완료 시각. 있으면 건너뛴다
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (law_id, article_no, article_no_sub)
@@ -46,18 +48,30 @@ CREATE INDEX IF NOT EXISTS idx_article_chunks_trgm
 CREATE INDEX IF NOT EXISTS idx_article_chunks_embedding
     ON article_chunks USING hnsw (embedding vector_cosine_ops);
 
--- 사내 사건 모니터링 / 심층 검토 워크플로우
-CREATE TABLE IF NOT EXISTS departments (
-    id      BIGSERIAL PRIMARY KEY,
-    name    TEXT NOT NULL UNIQUE
+-- 전국 사건 모니터링 / 심층 검토 워크플로우
+
+-- 행정구역(시도/시군구)을 자기참조 한 테이블로. code는 통계청 행정구역 코드이며
+-- 시도 2자리("11"), 시군구 5자리("11010")로 앞 2자리가 소속 시도가 된다.
+-- 지도 경계 파일(app/static/geo/*.topo.json)의 feature code와 동일한 값을 쓴다.
+CREATE TABLE IF NOT EXISTS regions (
+    code        TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,              -- "종로구"
+    full_name   TEXT NOT NULL,              -- "서울특별시 종로구"
+    level       TEXT NOT NULL,              -- 'sido' | 'sigungu'
+    parent_code TEXT REFERENCES regions(code)
 );
 
-CREATE TABLE IF NOT EXISTS sites (
+CREATE INDEX IF NOT EXISTS idx_regions_parent_code ON regions(parent_code);
+CREATE INDEX IF NOT EXISTS idx_regions_level ON regions(level);
+
+-- 사건 유형(산업재해/교통사고/화재 등). 지역과 함께 대시보드 교차집계의 축이 된다.
+CREATE TABLE IF NOT EXISTS incident_categories (
     id      BIGSERIAL PRIMARY KEY,
-    name    TEXT NOT NULL UNIQUE
+    code    TEXT NOT NULL UNIQUE,
+    name    TEXT NOT NULL
 );
 
--- requester: 부서 신청자 / manager: 안전부서 관리자
+-- requester: 사건을 신고하는 일반 사용자 / manager: 검토를 수행하는 담당자
 CREATE TABLE IF NOT EXISTS users (
     id              BIGSERIAL PRIMARY KEY,
     username        TEXT NOT NULL UNIQUE,
@@ -66,8 +80,8 @@ CREATE TABLE IF NOT EXISTS users (
     role            TEXT NOT NULL DEFAULT 'requester',
     rank            TEXT,                          -- 직급
     contact         TEXT,                          -- 연락처
-    department_id   BIGINT REFERENCES departments(id),
-    site_id         BIGINT REFERENCES sites(id),
+    sido_code       TEXT REFERENCES regions(code),
+    sigungu_code    TEXT REFERENCES regions(code),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -81,8 +95,10 @@ CREATE TABLE IF NOT EXISTS user_sessions (
 
 CREATE TABLE IF NOT EXISTS incidents (
     id              BIGSERIAL PRIMARY KEY,
-    department_id   BIGINT NOT NULL REFERENCES departments(id),
-    site_id         BIGINT NOT NULL REFERENCES sites(id),
+    -- 사건이 '발생한' 지역. 신고자 소속과 다를 수 있어 사건마다 따로 받는다.
+    sido_code       TEXT REFERENCES regions(code),
+    sigungu_code    TEXT REFERENCES regions(code),
+    category_id     BIGINT REFERENCES incident_categories(id),
     -- 구조화된 신고 항목
     reporter_name    TEXT,                     -- 작성자 이름
     reporter_rank    TEXT,                     -- 작성자 직급
@@ -105,8 +121,9 @@ CREATE TABLE IF NOT EXISTS incidents (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_incidents_site_id ON incidents(site_id);
-CREATE INDEX IF NOT EXISTS idx_incidents_department_id ON incidents(department_id);
+CREATE INDEX IF NOT EXISTS idx_incidents_sido_code ON incidents(sido_code);
+CREATE INDEX IF NOT EXISTS idx_incidents_sigungu_code ON incidents(sigungu_code);
+CREATE INDEX IF NOT EXISTS idx_incidents_category_id ON incidents(category_id);
 
 -- 사건 상태 변경 이력(감사 추적). incidents.status는 현재 상태 조회용 비정규화 값이고,
 -- 실제 검토 이력의 근거는 이 테이블에 append-only로 누적된다.

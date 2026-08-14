@@ -1,63 +1,94 @@
 function escapeHtml(str) {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// 사업장 카드 색상. 사업장 id 순서대로 고정 배정해 새로고침해도 색이 바뀌지 않는다.
-const SITE_TONES = ["site-a", "site-b", "site-c", "site-d", "site-e", "site-f"];
+// 경계 파일은 한 번만 받아 재사용한다(합쳐서 ~770KB이므로 기간을 바꿀 때마다 다시 받을 이유가 없다).
+let sidoFeatures = null;
+let sigunguFeatures = null;
+let latestStats = null;
+// null이면 전국(시도) 보기, 값이 있으면 해당 시도의 시군구 보기.
+let drilledSido = null;
 
-function renderSiteCards(bySite) {
-  const container = document.getElementById("site-grid");
-  if (!bySite.length) {
-    container.innerHTML = '<p class="empty-state">등록된 사업장이 없습니다.</p>';
+const mapEl = document.getElementById("region-map");
+const mapTitleEl = document.getElementById("map-title");
+const backBtn = document.getElementById("map-back");
+
+async function loadGeo() {
+  if (sidoFeatures && sigunguFeatures) return;
+  const [sido, sigungu] = await Promise.all([
+    fetch("/static/geo/sido.topo.json").then((r) => r.json()),
+    fetch("/static/geo/sigungu.topo.json").then((r) => r.json()),
+  ]);
+  sidoFeatures = decodeTopology(sido, "skorea_provinces_2018_geo");
+  sigunguFeatures = decodeTopology(sigungu, "skorea_municipalities_2018_geo");
+}
+
+function countMap(rows, key) {
+  const out = {};
+  for (const r of rows) out[r[key]] = r.count;
+  return out;
+}
+
+function renderRank(rows, labelFor) {
+  const el = document.getElementById("region-rank");
+  const top = rows.filter((r) => r.count > 0).sort((a, b) => b.count - a.count).slice(0, 10);
+  if (!top.length) {
+    el.innerHTML = '<li class="empty-state">해당 기간에 접수된 사건이 없습니다.</li>';
     return;
   }
-  container.innerHTML = bySite
+  el.innerHTML = top
     .map(
-      (s, i) => `<a class="site-card ${SITE_TONES[i % SITE_TONES.length]}" href="/review?site_id=${s.id}">
-        <div class="site-name">${escapeHtml(s.name)}</div>
-        <div class="site-count">${s.count}</div>
-        <div class="site-unit">건</div>
-      </a>`
+      (r) => `<li><span class="rank-name">${escapeHtml(labelFor(r))}</span>
+        <span class="rank-count">${r.count}건</span></li>`
     )
     .join("");
 }
 
-function renderHeatmap(bySite, byDepartment, matrix) {
-  const container = document.getElementById("dept-heatmap");
-  if (!bySite.length || !byDepartment.length) {
-    container.innerHTML = '<p class="empty-state">등록된 사업장 또는 부서가 없습니다.</p>';
+function renderCategoryBars(byCategory) {
+  const el = document.getElementById("category-bars");
+  const max = Math.max(1, ...byCategory.map((c) => c.count));
+  if (!byCategory.length) {
+    el.innerHTML = '<p class="empty-state">등록된 사건 유형이 없습니다.</p>';
     return;
   }
-
-  const countOf = {};
-  for (const m of matrix) countOf[`${m.site_id}:${m.department_id}`] = m.count;
-  const max = Math.max(1, ...matrix.map((m) => m.count));
-
-  const header = `<div class="heatmap-row heatmap-head">
-    <div class="heatmap-corner"></div>
-    ${bySite.map((s) => `<div class="heatmap-col-label" title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</div>`).join("")}
-  </div>`;
-
-  const rows = byDepartment
-    .map((d) => {
-      const cells = bySite
-        .map((s) => {
-          const count = countOf[`${s.id}:${d.id}`] || 0;
-          const intensity = count === 0 ? 0 : 0.18 + (count / max) * 0.72;
-          const heavy = intensity > 0.5 ? "is-heavy" : "";
-          const href = `/review?site_id=${s.id}&department_id=${d.id}`;
-          const label = `${s.name} · ${d.name}: ${count}건`;
-          return `<a class="heatmap-cell ${count === 0 ? "is-zero" : ""} ${heavy}" style="--heat:${intensity}" href="${href}" title="${escapeHtml(label)}">${count || ""}</a>`;
-        })
-        .join("");
-      return `<div class="heatmap-row">
-        <div class="heatmap-row-label" title="${escapeHtml(d.name)}">${escapeHtml(d.name)}</div>
-        ${cells}
-      </div>`;
+  el.innerHTML = byCategory
+    .map((c) => {
+      const intensity = c.count === 0 ? 0 : 0.18 + (c.count / max) * 0.72;
+      return `<a class="cat-bar-row" href="/review?category_id=${c.id}">
+        <span class="cat-bar-label">${escapeHtml(c.name)}</span>
+        <span class="cat-bar-track"><span class="cat-bar-fill ${c.count === 0 ? "is-zero" : ""}"
+          style="--heat:${intensity}; width:${(c.count / max) * 100}%"></span></span>
+        <span class="cat-bar-count">${c.count}</span>
+      </a>`;
     })
     .join("");
+}
 
-  container.innerHTML = `<div class="heatmap" style="--cols:${bySite.length}">${header}${rows}</div>`;
+function paintMap() {
+  if (!latestStats || !sidoFeatures) return;
+
+  if (drilledSido === null) {
+    const counts = countMap(latestStats.by_sido, "code");
+    mapTitleEl.textContent = "전국 지역별 사건 분포";
+    backBtn.hidden = true;
+    renderChoropleth(mapEl, sidoFeatures, counts, (data) => {
+      drilledSido = data.code;
+      paintMap();
+    });
+    renderRank(latestStats.by_sido, (r) => r.name);
+  } else {
+    // 시군구 코드 앞 2자리가 소속 시도다. 선택한 시도의 시군구만 그린다.
+    const features = sigunguFeatures.filter((f) => f.code.slice(0, 2) === drilledSido);
+    const rows = latestStats.by_sigungu.filter((r) => r.parent_code === drilledSido);
+    const sidoName = (latestStats.by_sido.find((s) => s.code === drilledSido) || {}).name || "";
+
+    mapTitleEl.textContent = `${sidoName} 시·군·구별 사건 분포`;
+    backBtn.hidden = false;
+    renderChoropleth(mapEl, features, countMap(rows, "code"), (data) => {
+      window.location.href = `/review?sido_code=${drilledSido}&sigungu_code=${data.code}`;
+    });
+    renderRank(rows, (r) => r.name);
+  }
 }
 
 async function loadStats() {
@@ -70,17 +101,22 @@ async function loadStats() {
 
   const resp = await fetch(`/api/dashboard/stats?${params.toString()}`);
   if (!resp.ok) return;
-  const data = await resp.json();
+  latestStats = await resp.json();
 
-  document.getElementById("stat-total").textContent = data.total;
+  document.getElementById("stat-total").textContent = latestStats.total;
   for (const key of ["review_requested", "in_review", "supplement_requested", "completed"]) {
     const el = document.getElementById(`stat-${key}`);
-    if (el) el.textContent = data.status_counts[key] ?? 0;
+    if (el) el.textContent = latestStats.status_counts[key] ?? 0;
   }
 
-  renderSiteCards(data.by_site);
-  renderHeatmap(data.by_site, data.by_department, data.matrix);
+  renderCategoryBars(latestStats.by_category);
+  paintMap();
 }
+
+backBtn.addEventListener("click", () => {
+  drilledSido = null;
+  paintMap();
+});
 
 document.getElementById("apply-range").addEventListener("click", loadStats);
 document.getElementById("reset-range").addEventListener("click", () => {
@@ -89,4 +125,9 @@ document.getElementById("reset-range").addEventListener("click", () => {
   loadStats();
 });
 
-loadStats();
+// 지도 데이터를 먼저 받아둔 뒤 통계를 불러야 첫 렌더에서 바로 색칠까지 끝난다.
+loadGeo()
+  .then(loadStats)
+  .catch(() => {
+    mapEl.innerHTML = '<p class="empty-state">지도 데이터를 불러오지 못했습니다.</p>';
+  });

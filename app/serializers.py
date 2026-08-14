@@ -4,10 +4,13 @@ from app.models import COMMENT_KIND_LABELS, INCIDENT_STATUS_LABELS, Incident
 def incident_to_dict(incident: Incident) -> dict:
     return {
         "id": incident.id,
-        "department": incident.department.name,
-        "department_id": incident.department_id,
-        "site": incident.site.name,
-        "site_id": incident.site_id,
+        "sido": incident.sido.name if incident.sido else None,
+        "sido_code": incident.sido_code,
+        "sigungu": incident.sigungu.name if incident.sigungu else None,
+        "sigungu_code": incident.sigungu_code,
+        "region": incident.region_label,
+        "category": incident.category.name if incident.category else None,
+        "category_id": incident.category_id,
         "reporter_name": incident.reporter_name,
         "reporter_rank": incident.reporter_rank,
         "reporter_contact": incident.reporter_contact,

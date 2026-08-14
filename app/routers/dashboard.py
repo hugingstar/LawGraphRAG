@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import require_manager
 from app.db import get_session
-from app.models import INCIDENT_STATUS_LABELS, Department, Incident, Site, User
+from app.models import INCIDENT_STATUS_LABELS, Incident, IncidentCategory, Region, User
 from app.templating import templates
 
 router = APIRouter()
@@ -66,7 +66,7 @@ def dashboard_stats(
     def join_conditions(fk_column):
         """기간 조건을 WHERE가 아닌 ON 절에 넣는다.
         WHERE에 넣으면 outer join이 inner join처럼 동작해서 '해당 기간에 사건이 0건인
-        사업장/부서'가 결과에서 통째로 사라진다."""
+        지역'이 결과에서 통째로 사라지고, 지도에서 그 지역이 아예 안 그려진다."""
         conditions = [fk_column]
         if start_dt:
             conditions.append(Incident.created_at >= start_dt)
@@ -83,36 +83,55 @@ def dashboard_stats(
     for status, count in status_rows:
         status_counts[status] = count
 
-    site_rows = (
-        session.query(Site.id, Site.name, func.count(Incident.id))
-        .outerjoin(Incident, join_conditions(Incident.site_id == Site.id))
-        .group_by(Site.id, Site.name)
-        .order_by(Site.id)
+    # 시도/시군구별 집계. 지도가 '사건 0건인 지역'도 회색으로 그려야 하므로 outerjoin으로
+    # 모든 지역을 남긴다(기간 조건은 위 join_conditions로 ON 절에 들어간다).
+    sido_rows = (
+        session.query(Region.code, Region.name, func.count(Incident.id))
+        .outerjoin(Incident, join_conditions(Incident.sido_code == Region.code))
+        .filter(Region.level == "sido")
+        .group_by(Region.code, Region.name)
+        .order_by(Region.code)
         .all()
     )
 
-    dept_rows = (
-        session.query(Department.id, Department.name, func.count(Incident.id))
-        .outerjoin(Incident, join_conditions(Incident.department_id == Department.id))
-        .group_by(Department.id, Department.name)
-        .order_by(Department.id)
+    sigungu_rows = (
+        session.query(Region.code, Region.name, Region.parent_code, func.count(Incident.id))
+        .outerjoin(Incident, join_conditions(Incident.sigungu_code == Region.code))
+        .filter(Region.level == "sigungu")
+        .group_by(Region.code, Region.name, Region.parent_code)
+        .order_by(Region.code)
         .all()
     )
 
-    # 사업장 x 부서 교차 집계 (히트맵용). 값이 0인 조합은 굳이 행으로 만들지 않고
-    # 프런트에서 by_site/by_department를 축으로 빈칸을 0으로 채운다.
+    category_rows = (
+        session.query(IncidentCategory.id, IncidentCategory.code, IncidentCategory.name, func.count(Incident.id))
+        .outerjoin(Incident, join_conditions(Incident.category_id == IncidentCategory.id))
+        .group_by(IncidentCategory.id, IncidentCategory.code, IncidentCategory.name)
+        .order_by(IncidentCategory.id)
+        .all()
+    )
+
+    # 시도 x 사건유형 교차 집계. 값이 0인 조합은 행으로 만들지 않고 프런트에서 0으로 채운다.
     matrix_rows = scoped(
-        session.query(Incident.site_id, Incident.department_id, func.count(Incident.id))
-        .group_by(Incident.site_id, Incident.department_id)
+        session.query(Incident.sido_code, Incident.category_id, func.count(Incident.id))
+        .group_by(Incident.sido_code, Incident.category_id)
     ).all()
 
     return {
         "total": total,
         "status_counts": status_counts,
         "status_labels": INCIDENT_STATUS_LABELS,
-        "by_site": [{"id": sid, "name": name, "count": count} for sid, name, count in site_rows],
-        "by_department": [{"id": did, "name": name, "count": count} for did, name, count in dept_rows],
+        "by_sido": [{"code": code, "name": name, "count": count} for code, name, count in sido_rows],
+        "by_sigungu": [
+            {"code": code, "name": name, "parent_code": parent, "count": count}
+            for code, name, parent, count in sigungu_rows
+        ],
+        "by_category": [
+            {"id": cid, "code": code, "name": name, "count": count}
+            for cid, code, name, count in category_rows
+        ],
         "matrix": [
-            {"site_id": sid, "department_id": did, "count": count} for sid, did, count in matrix_rows
+            {"sido_code": sido, "category_id": cid, "count": count}
+            for sido, cid, count in matrix_rows
         ],
     }

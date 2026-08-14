@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 
 from app.auth import SESSION_COOKIE, SESSION_TTL, create_session, hash_password, revoke_session, verify_password
 from app.db import get_session
-from app.models import Department, Site, User
+from app.models import User
+from app.routers.regions import sido_list, sigungu_list
 from app.templating import templates
 
 router = APIRouter()
@@ -88,8 +89,8 @@ def signup_page(request: Request, session: Session = Depends(get_session)):
         {
             "request": request,
             "hide_nav": True,
-            "departments": session.query(Department).order_by(Department.name).all(),
-            "sites": session.query(Site).order_by(Site.name).all(),
+            "sido_list": sido_list(session),
+            "sigungu_list": sigungu_list(session),
         },
     )
 
@@ -104,8 +105,8 @@ def signup(
     role: str = Form("requester"),
     rank: str = Form(""),
     contact: str = Form(""),
-    department_id: str = Form(""),
-    site_id: str = Form(""),
+    sido_code: str = Form(""),
+    sigungu_code: str = Form(""),
     session: Session = Depends(get_session),
 ):
     username = username.strip()
@@ -116,8 +117,8 @@ def signup(
             {
                 "request": request,
                 "hide_nav": True,
-                "departments": session.query(Department).order_by(Department.name).all(),
-                "sites": session.query(Site).order_by(Site.name).all(),
+                "sido_list": sido_list(session),
+                "sigungu_list": sigungu_list(session),
                 "error": message,
                 "username": username,
                 "display_name": display_name,
@@ -135,10 +136,10 @@ def signup(
         return fail("비밀번호가 일치하지 않습니다.")
     if role not in ("requester", "manager"):
         return fail("잘못된 역할입니다.")
-    if not department_id:
-        return fail("소속 부서를 선택해 주세요.")
-    if not site_id:
-        return fail("사업장을 선택해 주세요.")
+    if not sido_code:
+        return fail("활동 지역(시·도)을 선택해 주세요.")
+    if not sigungu_code:
+        return fail("활동 지역(시·군·구)을 선택해 주세요.")
     if not contact.strip():
         return fail("연락처를 입력해 주세요.")
     if session.query(User).filter(User.username == username).first():
@@ -151,8 +152,8 @@ def signup(
         role=role,
         rank=rank.strip() or None,
         contact=contact.strip(),
-        department_id=int(department_id),
-        site_id=int(site_id),
+        sido_code=sido_code,
+        sigungu_code=sigungu_code,
     )
     session.add(user)
     session.commit()

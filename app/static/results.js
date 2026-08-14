@@ -220,8 +220,8 @@ function renderList(incidents) {
     <li class="incident-item" data-id="${i.id}">
       <div class="incident-summary">
         <span class="col-status">${statusBadge(i.status)}</span>
-        <span class="incident-dept">${escapeHtml(i.department)}</span>
-        <span class="incident-site-tag">${escapeHtml(i.site)}</span>
+        <span class="incident-dept">${escapeHtml(i.category || "미분류")}</span>
+        <span class="incident-site-tag">${escapeHtml(i.region || "지역 미상")}</span>
         <span class="incident-excerpt">${escapeHtml(contentLabel(i))}</span>
         <span class="incident-date" title="사고일시: ${i.occurred_at ? formatDateTime(i.occurred_at) : "미기재"}">${formatDate(i.occurred_at)}</span>
         <span class="incident-date" title="요청일시: ${formatDateTime(i.created_at)}">${formatDate(i.created_at)}</span>

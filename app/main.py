@@ -9,11 +9,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.annotate import annotate_text, annotate_text_stream, citation_to_dict
 from app.auth import SESSION_COOKIE, require_login, user_for_token
 from app.db import SessionLocal, engine, get_session
-from app.migrate import run_migrations
+from app.migrate import finalize_migration, run_migrations
 from app.models import Base, User
+from app.regions_seed import seed_regions
 from app.seed import seed_reference_data
 from app.templating import templates
-from app.routers import auth, dashboard, incidents, results, review, settings
+from app.routers import auth, dashboard, incidents, regions, results, review, settings
 
 
 class NoCacheStaticFiles(StaticFiles):
@@ -29,6 +30,7 @@ app.mount("/static", NoCacheStaticFiles(directory="app/static"), name="static")
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(incidents.router)
+app.include_router(regions.router)
 app.include_router(results.router)
 app.include_router(review.router)
 app.include_router(settings.router)
@@ -50,8 +52,9 @@ async def attach_current_user(request: Request, call_next):
                 request.state.profile = {
                     "rank": user.rank,
                     "contact": user.contact,
-                    "department": user.department.name if user.department else None,
-                    "site": user.site.name if user.site else None,
+                    "sido": user.sido.name if user.sido else None,
+                    "sigungu": user.sigungu.name if user.sigungu else None,
+                    "region": user.sigungu.full_name if user.sigungu else None,
                 }
                 session.expunge(user)
                 request.state.user = user
@@ -75,12 +78,16 @@ async def auth_exception_handler(request: Request, exc: StarletteHTTPException):
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
+    # 1단계 마이그레이션(스키마) -> 지역 시드 -> 2단계(사업장->지역 이관 및 구 스키마 제거).
+    # 이관이 regions를 참조하므로 시드가 그 사이에 끼어야 한다(app/migrate.py 참고).
     run_migrations(engine)
     session = SessionLocal()
     try:
+        seed_regions(session)
         seed_reference_data(session)
     finally:
         session.close()
+    finalize_migration(engine)
 
 
 @app.get("/", response_class=HTMLResponse)

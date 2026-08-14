@@ -1,8 +1,8 @@
 {% extends "_layout.html" %}
 {% block content %}
       <div class="hero">
-        <h1>전사 사건 모니터링</h1>
-        <p class="hint">심층 검토 요청으로 접수된 전사 사건 현황을 사업장·부서별로 모니터링합니다.</p>
+        <h1>전국 사건 모니터링</h1>
+        <p class="hint">접수된 사건을 지역별로 모니터링합니다. 지도에서 시·도를 클릭하면 시·군·구까지 볼 수 있습니다.</p>
       </div>
 
       <section class="card range-card">
@@ -44,17 +44,31 @@
         </div>
       </div>
 
-      <h2 class="section-title">사업장별 사건 발생</h2>
-      <div class="site-grid" id="site-grid"></div>
-
-      <section class="card chart-card section-gap heatmap-card">
-        <h2>부서별 사건 발생 현황</h2>
-        <p class="hint side-note">사업장(가로) × 부서(세로)별 사건 건수입니다. 진할수록 건수가 많습니다.</p>
-        <div class="heatmap-scroll" id="dept-heatmap">
-          <p class="empty-state">불러오는 중...</p>
+      <section class="card chart-card section-gap">
+        <div class="list-head">
+          <h2 id="map-title">전국 지역별 사건 분포</h2>
+          <button id="map-back" class="btn-secondary" hidden>← 전국 보기</button>
         </div>
+        <p class="hint side-note">진할수록 사건이 많은 지역입니다. 시·도를 클릭하면 시·군·구로 좁혀볼 수 있고, 시·군·구를 클릭하면 해당 지역의 사건 목록으로 이동합니다.</p>
+        <div class="map-split">
+          <div class="map-wrap" id="region-map">
+            <p class="empty-state">지도를 불러오는 중...</p>
+          </div>
+          <div class="map-side">
+            <h3 class="timeline-title">사건 많은 지역</h3>
+            <ol class="region-rank" id="region-rank"></ol>
+          </div>
+        </div>
+      </section>
+
+      <section class="card chart-card section-gap">
+        <h2>사건 유형별 발생 현황</h2>
+        <p class="hint side-note">선택한 지역 범위의 사건 유형 분포입니다.</p>
+        <div id="category-bars"></div>
       </section>
 {% endblock %}
 {% block scripts %}
+  <script src="/static/topo.js?v={{ v }}"></script>
+  <script src="/static/map.js?v={{ v }}"></script>
   <script src="/static/dashboard.js?v={{ v }}"></script>
 {% endblock %}

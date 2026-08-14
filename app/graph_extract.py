@@ -23,6 +23,10 @@ class EntityRelation(BaseModel):
 class ArticleReference(BaseModel):
     article_no: int
     article_no_sub: int = Field(default=0)
+    law_name: str | None = Field(
+        default=None,
+        description="다른 법령을 인용한 경우 그 법령명(예: '형법'). 같은 법령 내 인용이면 비워둘 것.",
+    )
 
 
 class ArticleGraphData(BaseModel):
@@ -35,7 +39,9 @@ _PROMPT = PromptTemplate.from_template(
     "[조문 원문]\n{full_text}\n\n"
     "이 조문에서 다음 두 가지를 추출하세요.\n"
     "1. references: 이 조문이 명시적으로 인용하는 다른 조(예: \"제38조에 따라\")의 조번호 목록. "
-    "같은 조문 내 항·호 번호는 무시하고, 다른 조(article) 인용만 포함하세요.\n"
+    "같은 조문 내 항·호 번호는 무시하고, 다른 조(article) 인용만 포함하세요. "
+    "\"형법 제30조\"처럼 다른 법령을 함께 밝힌 인용이면 law_name에 그 법령명을 적고, "
+    "같은 법령 안에서의 인용이면 law_name은 비워 두세요.\n"
     "2. entities: 이 조문에 등장하는 핵심 개념(의무주체, 정의어, 적용대상, 처벌 관련 개념 등)과 "
     "관계 유형을 추출하세요. 관계 유형은 다음 중 하나입니다: "
     "DEFINES(이 조문이 정의하는 용어), APPLIES_TO(이 조문이 적용되는 대상), "

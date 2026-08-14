@@ -86,14 +86,14 @@ function contentLabel(i) {
     return `${keyword}에 관한 요청`;
   }
   if (i.location) return `${i.location}에 관한 요청`;
-  return `${i.department} 사고 요청`;
+  return `${i.region || "지역 미상"} 사건 요청`;
 }
 
 /** 심층 검토 요청에 작성된 내용을 항목별로 보여준다. */
 function renderRequestDetail(incident) {
   const rows = [
-    ["사업장", incident.site],
-    ["요청 부서", incident.department],
+    ["발생 지역", incident.region],
+    ["사건 유형", incident.category],
     ["작성자", incident.reporter_summary],
     ["사고일시", incident.occurred_at ? formatDateTime(incident.occurred_at) : ""],
     ["사고장소", incident.location],

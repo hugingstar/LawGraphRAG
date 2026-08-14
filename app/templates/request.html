@@ -1,18 +1,27 @@
 {% extends "_layout.html" %}
+{% import "_macros.html" as macros %}
 {% block content %}
       <div class="hero">
         <h1>나의 요청</h1>
         <p class="hint">Law Owly가 안전부서팀과 함께 심층 검토합니다. 검토가 필요한 내용을 말씀해주세요.</p>
       </div>
 
-      {% if not profile_complete %}
-      <section class="card input-card">
-        <p class="form-error">계정에 소속 부서와 사업장이 등록되어 있지 않아 요청을 접수할 수 없습니다. 안전부서 관리자에게 프로필 등록을 요청하세요.</p>
-      </section>
-      {% else %}
       <div class="request-split">
         <section class="card input-card request-main">
           <h2 class="card-title">사고 내용</h2>
+
+          <p class="field-group-title">사건 발생 지역 <span class="hint-inline">(신고자 소속과 달라도 됩니다)</span></p>
+          {{ macros.region_selects(sido_list, default_sido_code, default_sigungu_code, required=True) }}
+
+          <div class="field">
+            <label class="field-label" for="category_id">사건 유형</label>
+            <select id="category_id">
+              <option value="">선택 안 함</option>
+              {% for c in categories %}
+              <option value="{{ c.id }}">{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
 
           <div class="field-row">
             <div class="field">
@@ -66,8 +75,7 @@
             <h2 class="card-title">요청자 정보</h2>
             <p class="hint profile-note">로그인 계정에 등록된 정보가 자동으로 사용됩니다. 정보를 바꾸려면 <a href="/settings">설정</a>에서 직접 수정할 수 있습니다.</p>
             <dl class="detail-grid profile-grid">
-              <dt>사업장</dt><dd>{{ profile.site or "미등록" }}</dd>
-              <dt>요청 부서</dt><dd>{{ profile.department or "미등록" }}</dd>
+              <dt>활동 지역</dt><dd>{{ profile.region or "미등록" }}</dd>
               <dt>이름</dt><dd>{{ profile.name }}</dd>
               <dt>직급</dt><dd>{{ profile.rank or "-" }}</dd>
               <dt>연락처</dt><dd>{{ profile.contact or "-" }}</dd>
@@ -88,9 +96,9 @@
           </section>
         </aside>
       </div>
-      {% endif %}
 {% endblock %}
 {% block scripts %}
+  <script src="/static/regions.js?v={{ v }}"></script>
   <script src="/static/render.js?v={{ v }}"></script>
   <script src="/static/request.js?v={{ v }}"></script>
 {% endblock %}

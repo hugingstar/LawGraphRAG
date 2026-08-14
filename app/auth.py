@@ -82,7 +82,7 @@ def require_login(request: Request) -> User:
 def require_manager(request: Request) -> User:
     user = require_login(request)
     if not user.is_manager:
-        raise HTTPException(status_code=403, detail="안전부서 관리자만 접근할 수 있습니다.")
+        raise HTTPException(status_code=403, detail="검토 담당자만 접근할 수 있습니다.")
     return user
 
 

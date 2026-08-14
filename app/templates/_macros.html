@@ -1,0 +1,23 @@
+{# 시·도 -> 시·군·구 2단 셀렉트. 회원가입/설정/사건작성이 같은 마크업을 쓰므로 매크로로 모은다.
+   시군구 <option>은 서버에서 렌더하지 않고 app/static/regions.js가 시도 선택에 따라 채운다
+   (250개를 세 화면에 매번 렌더하면 HTML만 커지고 어차피 대부분 안 쓰인다).
+   data-selected는 편집 화면에서 기존 선택값을 복원하기 위한 힌트다. #}
+{% macro region_selects(sido_list, selected_sido='', selected_sigungu='', required=False) %}
+<div class="field-row">
+  <div class="field">
+    <label class="field-label" for="sido_code">시·도 {% if required %}<span class="required-mark">*</span>{% endif %}</label>
+    <select id="sido_code" name="sido_code" data-region-sido {% if required %}required{% endif %}>
+      <option value="">시·도 선택</option>
+      {% for s in sido_list %}
+      <option value="{{ s.code }}" {{ "selected" if selected_sido == s.code else "" }}>{{ s.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label class="field-label" for="sigungu_code">시·군·구 {% if required %}<span class="required-mark">*</span>{% endif %}</label>
+    <select id="sigungu_code" name="sigungu_code" data-region-sigungu data-selected="{{ selected_sigungu or '' }}" {% if required %}required{% endif %}>
+      <option value="">시·군·구 선택</option>
+    </select>
+  </div>
+</div>
+{% endmacro %}

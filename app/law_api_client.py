@@ -4,6 +4,8 @@ OC 키는 https://open.law.go.kr 에서 발급받아 LAW_OC_KEY 환경변수로 
 API 스펙: https://open.law.go.kr/LSO/openApi/guideList.do
 """
 
+import time
+
 import httpx
 
 from app.config import settings
@@ -11,9 +13,40 @@ from app.config import settings
 SEARCH_URL = "https://www.law.go.kr/DRF/lawSearch.do"
 DETAIL_URL = "https://www.law.go.kr/DRF/lawService.do"
 
+MAX_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 2.0
+
+# 수십 개 법령을 연달아 수집하므로 커넥션을 재사용한다(매 호출 httpx.get은 TCP/TLS 핸드셰이크를
+# 매번 새로 한다). 모듈 수준에 하나만 두고 프로세스 수명 동안 함께 쓴다.
+_client = httpx.Client(timeout=30.0, headers={"User-Agent": "LawOwly/1.0"})
+
 
 class LawApiError(RuntimeError):
     pass
+
+
+def _get_with_retry(url: str, params: dict) -> httpx.Response:
+    """일시적 오류(타임아웃/5xx/429)는 지수 백오프로 재시도한다.
+
+    법제처 API는 대량 조회 중 간헐적으로 실패하는데, 재시도가 없으면 법령 하나가 통째로
+    유실된다. 4xx(429 제외)는 요청 자체가 잘못된 것이라 재시도하지 않는다.
+    """
+    last_error: Exception | None = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            resp = _client.get(url, params=params)
+            if resp.status_code < 400:
+                return resp
+            if resp.status_code != 429 and resp.status_code < 500:
+                raise LawApiError(f"법제처 API 오류 {resp.status_code}: {resp.text[:200]}")
+            last_error = LawApiError(f"법제처 API 오류 {resp.status_code}")
+        except httpx.RequestError as exc:
+            last_error = exc
+
+        if attempt < MAX_RETRIES - 1:
+            time.sleep(RETRY_BACKOFF_SECONDS * (2**attempt))
+
+    raise LawApiError(f"법제처 API 호출이 {MAX_RETRIES}회 모두 실패했습니다: {last_error}")
 
 
 def _require_oc_key() -> str:
@@ -25,19 +58,21 @@ def _require_oc_key() -> str:
     return settings.law_oc_key
 
 
-def search_law(query: str, *, display: int = 20) -> list[dict]:
-    """법령명으로 검색해 후보 목록(법령ID/MST 포함)을 반환한다."""
-    oc = _require_oc_key()
+def search_law(query: str, *, display: int = 100) -> list[dict]:
+    """법령명으로 검색해 후보 목록(법령ID/MST 포함)을 반환한다.
+
+    display를 넉넉히 두는 이유는, 수집 측에서 '법령명 정확 일치'만 채택하기 때문이다.
+    "민법"처럼 부분 일치하는 법령이 많은 이름은 목록이 잘리면 정작 원하는 법이 후보에서
+    빠져 수집이 실패한다.
+    """
     params = {
-        "OC": oc,
+        "OC": _require_oc_key(),
         "target": "law",
         "type": "XML",
         "query": query,
         "display": display,
     }
-    resp = httpx.get(SEARCH_URL, params=params, timeout=30.0)
-    resp.raise_for_status()
-    return _parse_search_response(resp.text)
+    return _parse_search_response(_get_with_retry(SEARCH_URL, params).text)
 
 
 def get_law_detail_xml(law_id: str | None = None, mst: str | None = None) -> str:
@@ -52,9 +87,7 @@ def get_law_detail_xml(law_id: str | None = None, mst: str | None = None) -> str
     else:
         params["ID"] = law_id
 
-    resp = httpx.get(DETAIL_URL, params=params, timeout=30.0)
-    resp.raise_for_status()
-    return resp.text
+    return _get_with_retry(DETAIL_URL, params).text
 
 
 def _parse_search_response(xml_text: str) -> list[dict]:

@@ -8,20 +8,26 @@
       <section class="card input-card">
         <div class="field-row">
           <div class="field">
-            <label class="field-label" for="site-select">사업장</label>
-            <select id="site-select">
-              <option value="">전체 사업장</option>
-              {% for s in sites %}
-              <option value="{{ s.id }}" {{ "selected" if initial_site_id|string == s.id|string else "" }}>{{ s.name }}</option>
+            <label class="field-label" for="sido_code">시·도</label>
+            <select id="sido_code" data-region-sido>
+              <option value="">전국</option>
+              {% for s in sido_list %}
+              <option value="{{ s.code }}" {{ "selected" if initial_sido_code == s.code else "" }}>{{ s.name }}</option>
               {% endfor %}
             </select>
           </div>
           <div class="field">
-            <label class="field-label" for="department-select">부서</label>
-            <select id="department-select">
-              <option value="">전체 부서</option>
-              {% for d in departments %}
-              <option value="{{ d.id }}" {{ "selected" if initial_department_id|string == d.id|string else "" }}>{{ d.name }}</option>
+            <label class="field-label" for="sigungu_code">시·군·구</label>
+            <select id="sigungu_code" data-region-sigungu data-selected="{{ initial_sigungu_code or '' }}">
+              <option value="">전체</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label" for="category-select">사건 유형</label>
+            <select id="category-select">
+              <option value="">전체 유형</option>
+              {% for c in categories %}
+              <option value="{{ c.id }}" {{ "selected" if initial_category_id|string == c.id|string else "" }}>{{ c.name }}</option>
               {% endfor %}
             </select>
           </div>
@@ -94,6 +100,7 @@
 {% endblock %}
 {% block scripts %}
   <script>window.CURRENT_USER_ID = {{ request.state.user.id }};</script>
+  <script src="/static/regions.js?v={{ v }}"></script>
   <script src="/static/render.js?v={{ v }}"></script>
   <script src="/static/app.js?v={{ v }}"></script>
   <script src="/static/review.js?v={{ v }}"></script>

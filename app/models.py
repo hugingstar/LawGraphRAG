@@ -25,8 +25,8 @@ class Base(DeclarativeBase):
 
 # 사건 처리 상태
 #   review_requested     검토 요청 접수
-#   in_review            안전부서 검토중
-#   supplement_requested 내용이 부족해 요청자에게 보완 요청
+#   in_review            담당자 검토중
+#   supplement_requested 내용이 부족해 신고자에게 보완 요청
 #   completed            검토 완료
 INCIDENT_STATUSES = (
     "review_requested",
@@ -55,11 +55,11 @@ COMMENT_KIND_LABELS = {
     "conclusion": "최종 검토 결과",
 }
 
-# requester: 각 부서에서 심층 검토를 요청하는 신청자
-# manager: 안전부서에서 심층 검토를 수행하는 관리자
+# requester: 사건을 신고하고 심층 검토를 요청하는 신청자
+# manager: 심층 검토를 수행하는 담당자
 USER_ROLES = ("requester", "manager")
 
-USER_ROLE_LABELS = {"requester": "신청자", "manager": "안전부서 관리자"}
+USER_ROLE_LABELS = {"requester": "신청자", "manager": "검토 담당자"}
 
 
 class User(Base):
@@ -72,12 +72,14 @@ class User(Base):
     role: Mapped[str] = mapped_column(String, nullable=False, default="requester")
     rank: Mapped[str | None] = mapped_column(String)  # 직급
     contact: Mapped[str | None] = mapped_column(String)  # 연락처
-    department_id: Mapped[int | None] = mapped_column(ForeignKey("departments.id"))
-    site_id: Mapped[int | None] = mapped_column(ForeignKey("sites.id"))
+    # 사용자의 활동 지역. 사건의 '발생 지역'과는 별개이며(사건은 폼에서 직접 입력),
+    # 신규 사건 작성 시 지역 셀렉트의 기본값으로만 쓰인다.
+    sido_code: Mapped[str | None] = mapped_column(ForeignKey("regions.code"))
+    sigungu_code: Mapped[str | None] = mapped_column(ForeignKey("regions.code"))
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    department: Mapped["Department | None"] = relationship()
-    site: Mapped["Site | None"] = relationship()
+    sido: Mapped["Region | None"] = relationship(foreign_keys=[sido_code])
+    sigungu: Mapped["Region | None"] = relationship(foreign_keys=[sigungu_code])
 
     @property
     def is_manager(self) -> bool:
@@ -102,30 +104,51 @@ class UserSession(Base):
     user: Mapped["User"] = relationship()
 
 
-class Department(Base):
-    __tablename__ = "departments"
+class Region(Base):
+    """행정구역(시도/시군구)을 자기참조 한 테이블로 담는다.
+
+    `code`는 통계청(KOSTAT) 행정구역 코드로, 시도는 2자리("11"=서울특별시),
+    시군구는 5자리("11010"=종로구)이며 앞 2자리가 곧 소속 시도 코드다.
+    지도 경계 파일(app/static/geo/*.topo.json)의 feature code와 같은 값을 쓰므로
+    DB 집계 결과를 지도 도형에 바로 매칭할 수 있다(app/regions_seed.py 참고).
+    """
+
+    __tablename__ = "regions"
+
+    code: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)  # "종로구"
+    full_name: Mapped[str] = mapped_column(String, nullable=False)  # "서울특별시 종로구"
+    level: Mapped[str] = mapped_column(String, nullable=False)  # 'sido' | 'sigungu'
+    parent_code: Mapped[str | None] = mapped_column(ForeignKey("regions.code"))
+
+    children: Mapped[list["Region"]] = relationship(
+        back_populates="parent", remote_side="Region.parent_code"
+    )
+    parent: Mapped["Region | None"] = relationship(
+        back_populates="children", remote_side="Region.code"
+    )
+
+
+class IncidentCategory(Base):
+    """사건 유형(산업재해/교통사고/화재 등). 지역과 함께 대시보드 교차집계의 축이 된다."""
+
+    __tablename__ = "incident_categories"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    code: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
 
-    incidents: Mapped[list["Incident"]] = relationship(back_populates="department")
-
-
-class Site(Base):
-    __tablename__ = "sites"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
-
-    incidents: Mapped[list["Incident"]] = relationship(back_populates="site")
+    incidents: Mapped[list["Incident"]] = relationship(back_populates="category")
 
 
 class Incident(Base):
     __tablename__ = "incidents"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    department_id: Mapped[int] = mapped_column(ForeignKey("departments.id"), nullable=False)
-    site_id: Mapped[int] = mapped_column(ForeignKey("sites.id"), nullable=False)
+    # 사건이 '발생한' 지역. 신고자 소속(User.sido_code)과 다를 수 있으므로 사건마다 따로 받는다.
+    sido_code: Mapped[str | None] = mapped_column(ForeignKey("regions.code"))
+    sigungu_code: Mapped[str | None] = mapped_column(ForeignKey("regions.code"))
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("incident_categories.id"))
 
     # 구조화된 신고 항목. statement는 이 항목들을 합쳐 만든 분석 대상 원문이며,
     # citations의 char offset이 statement를 기준으로 하므로 저장 후 변경하지 않는다.
@@ -152,8 +175,9 @@ class Incident(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    department: Mapped["Department"] = relationship(back_populates="incidents")
-    site: Mapped["Site"] = relationship(back_populates="incidents")
+    sido: Mapped["Region | None"] = relationship(foreign_keys=[sido_code])
+    sigungu: Mapped["Region | None"] = relationship(foreign_keys=[sigungu_code])
+    category: Mapped["IncidentCategory | None"] = relationship(back_populates="incidents")
     created_by: Mapped["User | None"] = relationship(foreign_keys=[created_by_user_id])
     assigned_manager: Mapped["User | None"] = relationship(foreign_keys=[assigned_manager_id])
     events: Mapped[list["IncidentEvent"]] = relationship(
@@ -170,6 +194,15 @@ class Incident(Base):
     def reporter_summary(self) -> str:
         parts = [p for p in (self.reporter_name, self.reporter_rank, self.reporter_contact) if p]
         return " / ".join(parts) if parts else (self.reporter_info or "")
+
+    @property
+    def region_label(self) -> str:
+        """'서울특별시 종로구'처럼 사람이 읽는 지역 표기. 시군구가 없으면 시도만 반환한다."""
+        if self.sigungu:
+            return self.sigungu.full_name
+        if self.sido:
+            return self.sido.full_name
+        return ""
 
 
 class IncidentEvent(Base):
@@ -252,6 +285,11 @@ class Article(Base):
     title: Mapped[str | None] = mapped_column(Text)
     full_text: Mapped[str] = mapped_column(Text, nullable=False)
     effective_date: Mapped[datetime.date | None] = mapped_column(Date)
+    # full_text의 해시. 재수집 때 내용이 그대로면 청킹·임베딩을 통째로 건너뛴다.
+    content_hash: Mapped[str | None] = mapped_column(String)
+    # 그래프 추출(Gemini 호출)을 끝낸 시각. 값이 있으면 graph_ingest가 건너뛴다.
+    # 조문 하나당 LLM 1회라 이 표시가 없으면 재실행마다 전량 재호출된다.
+    graph_synced_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
