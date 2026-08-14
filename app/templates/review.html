@@ -2,7 +2,7 @@
 {% block content %}
       <div class="hero">
         <h1>관리자 검토</h1>
-        <p class="hint">전체 사업장·전체 부서의 요청이 최신순으로 표시됩니다. 사업장·부서를 선택하거나 검색어로 범위를 좁힐 수 있습니다.</p>
+        <p class="hint">전국 모든 지역·사건 유형의 요청이 최신순으로 표시됩니다. 지역·사건 유형을 선택하거나 검색어로 범위를 좁힐 수 있습니다.</p>
       </div>
 
       <section class="card input-card">
@@ -36,7 +36,7 @@
         <div class="field search-field">
           <label class="field-label" for="search-input">통합 검색</label>
           <div class="search-row">
-            <input class="text-input" type="search" id="search-input" placeholder="사고 내용, 장소, 작성자, 사업장, 부서, 검토 결과에서 검색">
+            <input class="text-input" type="search" id="search-input" placeholder="사고 내용, 장소, 작성자, 지역, 사건 유형, 검토 결과에서 검색">
             <button id="search-btn">검색</button>
           </div>
         </div>
@@ -58,8 +58,8 @@
             </div>
             <div class="incident-col-head">
               <span class="col-status" aria-hidden="true"></span>
-              <span>부서</span>
-              <span>사업장</span>
+              <span>사건 유형</span>
+              <span>지역</span>
               <span>내용</span>
               <span>사고 날짜</span>
               <span>요청 날짜</span>
