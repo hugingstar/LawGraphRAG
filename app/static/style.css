@@ -682,6 +682,27 @@ mark:hover {
   color: var(--danger);
 }
 
+.danger-zone {
+  margin-top: 1.25rem;
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+}
+
+.danger-title {
+  color: var(--danger);
+}
+
+.btn-danger {
+  background: var(--danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 85%, black);
+}
+
+.btn-danger:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 25%, transparent);
+}
+
 /* ---- 파일 첨부 ---- */
 
 .file-input {

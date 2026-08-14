@@ -74,6 +74,38 @@
           </div>
         </form>
       </section>
+
+      <section class="card input-card settings-card danger-zone">
+        <h2 class="card-title danger-title">회원 탈퇴</h2>
+        <p class="hint">계정을 삭제하면 되돌릴 수 없습니다. 그동안 작성한 신고 이력 자체는 감사 기록으로
+          남지만(작성자 표시만 사라집니다), 로그인 계정과 개인정보는 즉시 삭제됩니다.</p>
+
+        <form method="post" action="/settings/delete-account"
+              onsubmit="return confirm('정말 회원 탈퇴하시겠습니까? 이 작업은 되돌릴 수 없습니다.');">
+          {% if delete_error %}
+          <p class="form-error">{{ delete_error }}</p>
+          {% endif %}
+
+          <p class="field-group-title">본인 확인을 위해 아이디와 비밀번호를 다시 입력해 주세요.</p>
+
+          <div class="field-row">
+            <div class="field">
+              <label class="field-label" for="confirm_username">아이디</label>
+              <input class="text-input" type="text" id="confirm_username" name="confirm_username"
+                     placeholder="{{ profile.username }}" autocomplete="off" required>
+            </div>
+            <div class="field">
+              <label class="field-label" for="confirm_password">비밀번호</label>
+              <input class="text-input" type="password" id="confirm_password" name="confirm_password"
+                     autocomplete="current-password" required>
+            </div>
+          </div>
+
+          <div class="action-row">
+            <button type="submit" class="btn-danger">회원 탈퇴하기</button>
+          </div>
+        </form>
+      </section>
 {% endblock %}
 {% block scripts %}
   <script src="/static/regions.js?v={{ v }}"></script>

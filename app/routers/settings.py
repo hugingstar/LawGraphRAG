@@ -1,10 +1,17 @@
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.auth import require_login, verify_password, hash_password
+from app.auth import SESSION_COOKIE, require_login, verify_password, hash_password
 from app.db import get_session
-from app.models import OCCUPATIONS, User
+from app.models import (
+    OCCUPATIONS,
+    Incident,
+    IncidentAttachment,
+    IncidentComment,
+    IncidentEvent,
+    User,
+)
 from app.routers.regions import sido_list, sigungu_list
 from app.templating import templates
 
@@ -100,3 +107,66 @@ def update_settings(
     session.commit()
 
     return render("변경사항이 저장되었습니다.", False)
+
+
+@router.post("/settings/delete-account")
+def delete_account(
+    request: Request,
+    confirm_username: str = Form(...),
+    confirm_password: str = Form(...),
+    user: User = Depends(require_login),
+    session: Session = Depends(get_session),
+):
+    """계정을 실제로 삭제한다. 되돌릴 수 없으므로 아이디·비밀번호를 다시 입력받아
+    확인한다 — 로그인된 상태라 세션만으로도 삭제할 수 있지만, 그러면 다른 사람이 잠깐
+    자리를 비운 계정을 만졌을 때 실수로 탈퇴시키는 사고를 막을 수 없다."""
+    profile = session.get(User, user.id)
+
+    if confirm_username.strip() != profile.username:
+        return templates.TemplateResponse(
+            "settings.html",
+            {
+                "request": request,
+                "active": "settings",
+                "profile": profile,
+                "sido_list": sido_list(session),
+                "sigungu_list": sigungu_list(session),
+                "occupations": OCCUPATIONS,
+                "delete_error": "아이디가 일치하지 않습니다.",
+            },
+            status_code=400,
+        )
+    if not verify_password(confirm_password, profile.password_hash):
+        return templates.TemplateResponse(
+            "settings.html",
+            {
+                "request": request,
+                "active": "settings",
+                "profile": profile,
+                "sido_list": sido_list(session),
+                "sigungu_list": sigungu_list(session),
+                "occupations": OCCUPATIONS,
+                "delete_error": "비밀번호가 올바르지 않습니다.",
+            },
+            status_code=400,
+        )
+
+    # 이 사람이 작성/처리한 사건과 감사 이력은 지우지 않는다 — incident_events는 append-only
+    # 감사 추적이라 계정 탈퇴로 사라지면 안 된다. 대신 작성자 연결만 끊는다(컬럼이 nullable).
+    for model, column in (
+        (Incident, Incident.created_by_user_id),
+        (Incident, Incident.assigned_manager_id),
+        (IncidentEvent, IncidentEvent.actor_user_id),
+        (IncidentComment, IncidentComment.author_user_id),
+        (IncidentAttachment, IncidentAttachment.uploaded_by_user_id),
+    ):
+        session.query(model).filter(column == profile.id).update(
+            {column.key: None}, synchronize_session=False
+        )
+
+    session.delete(profile)  # user_sessions는 ON DELETE CASCADE로 함께 삭제된다
+    session.commit()
+
+    response = RedirectResponse(url="/login?deleted=1", status_code=303)
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    return response

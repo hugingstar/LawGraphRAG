@@ -46,12 +46,13 @@ def _safe_next(next_path: str, user: User) -> str:
 
 
 @router.get("/login", response_class=HTMLResponse)
-def login_page(request: Request, next: str = ""):
+def login_page(request: Request, next: str = "", deleted: str = ""):
     current = getattr(request.state, "user", None)
     if current:
         return RedirectResponse(url=_home_for(current), status_code=303)
     return templates.TemplateResponse(
-        "login.html", {"request": request, "hide_nav": True, "next": next}
+        "login.html",
+        {"request": request, "hide_nav": True, "next": next, "deleted": bool(deleted)},
     )
 
 
