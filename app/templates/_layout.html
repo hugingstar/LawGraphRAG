@@ -47,8 +47,8 @@
         <a href="/settings" class="{{ 'active' if active == 'settings' else '' }}">설정</a>
         {% if request.state.user.is_manager %}
         <span class="topnav-sep" aria-hidden="true"></span>
-        <a href="/dashboard" class="{{ 'active' if active == 'dashboard' else '' }}">전사 사건 모니터링</a>
-        <a href="/review" class="{{ 'active' if active == 'review' else '' }}">관리자 검토</a>
+        <a href="/dashboard" class="{{ 'active' if active == 'dashboard' else '' }}">전국 사건 모니터링</a>
+        <a href="/review" class="{{ 'active' if active == 'review' else '' }}">법부엉이 검토</a>
         {% endif %}
       </nav>
       {% endif %}

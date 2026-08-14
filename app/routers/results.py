@@ -24,7 +24,7 @@ def my_incidents(
     user: User = Depends(require_login),
     session: Session = Depends(get_session),
 ):
-    """요청자는 본인이 올린 요청만, 관리자는 본인이 올린 요청을 조회한다(관리자 검토 화면은 /review)."""
+    """요청자는 본인이 올린 요청만, 관리자는 본인이 올린 요청을 조회한다(법부엉이 검토 화면은 /review)."""
     query = session.query(Incident).filter(Incident.created_by_user_id == user.id)
     if status:
         query = query.filter(Incident.status == status)
