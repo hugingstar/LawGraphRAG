@@ -50,7 +50,7 @@ async def attach_current_user(request: Request, call_next):
             if user:
                 # 세션이 닫힌 뒤에도 템플릿에서 쓸 수 있도록 관계 값을 미리 평문으로 뽑아둔다.
                 request.state.profile = {
-                    "rank": user.rank,
+                    "occupation": user.occupation_label,
                     "contact": user.contact,
                     "sido": user.sido.name if user.sido else None,
                     "sigungu": user.sigungu.name if user.sigungu else None,

@@ -12,7 +12,7 @@ def incident_to_dict(incident: Incident) -> dict:
         "category": incident.category.name if incident.category else None,
         "category_id": incident.category_id,
         "reporter_name": incident.reporter_name,
-        "reporter_rank": incident.reporter_rank,
+        "reporter_occupation": incident.reporter_occupation,
         "reporter_contact": incident.reporter_contact,
         "reporter_summary": incident.reporter_summary,
         "occurred_at": incident.occurred_at.isoformat() if incident.occurred_at else None,

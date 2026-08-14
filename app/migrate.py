@@ -15,12 +15,31 @@ Base.metadata.create_all()은 '없는 테이블'만 만들 뿐 기존 테이블�
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+# 직급(자유 텍스트) -> 직종(선택형) 전환. 기존 컬럼이 있으면 이름만 바꿔 데이터를 보존하고,
+# 없으면(신규 DB) 아래 ADD COLUMN IF NOT EXISTS가 새로 만든다.
+_RENAME_RANK_TO_OCCUPATION = """
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'rank')
+       AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'occupation')
+    THEN
+        ALTER TABLE users RENAME COLUMN rank TO occupation;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'incidents' AND column_name = 'reporter_rank')
+       AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'incidents' AND column_name = 'reporter_occupation')
+    THEN
+        ALTER TABLE incidents RENAME COLUMN reporter_rank TO reporter_occupation;
+    END IF;
+END $$;
+"""
+
 _STATEMENTS = [
-    "ALTER TABLE users ADD COLUMN IF NOT EXISTS rank TEXT",
+    _RENAME_RANK_TO_OCCUPATION,
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS occupation TEXT",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS contact TEXT",
     "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS reporter_info TEXT",
     "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS reporter_name TEXT",
-    "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS reporter_rank TEXT",
+    "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS reporter_occupation TEXT",
     "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS reporter_contact TEXT",
     "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS occurred_at TIMESTAMPTZ",
     "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS location TEXT",

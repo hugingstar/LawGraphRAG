@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash   TEXT NOT NULL,
     display_name    TEXT NOT NULL,
     role            TEXT NOT NULL DEFAULT 'requester',
-    rank            TEXT,                          -- 직급
+    occupation      TEXT,                          -- 직종 (OCCUPATIONS 코드)
     contact         TEXT,                          -- 연락처
     sido_code       TEXT REFERENCES regions(code),
     sigungu_code    TEXT REFERENCES regions(code),
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS incidents (
     category_id     BIGINT REFERENCES incident_categories(id),
     -- 구조화된 신고 항목
     reporter_name    TEXT,                     -- 작성자 이름
-    reporter_rank    TEXT,                     -- 작성자 직급
+    reporter_occupation TEXT,                  -- 작성자 직종 (레이블 텍스트 스냅샷)
     reporter_contact TEXT,                     -- 작성자 연락처
     reporter_info   TEXT,                      -- (구버전) 통합 인적사항
     occurred_at     TIMESTAMPTZ,               -- 사고일시

@@ -61,6 +61,26 @@ USER_ROLES = ("requester", "manager")
 
 USER_ROLE_LABELS = {"requester": "신청자", "manager": "검토 담당자"}
 
+# 일반 시민 대상 서비스라 회사 직급이 아니라 직종(occupation) 대분류에서 고른다.
+OCCUPATIONS = (
+    ("office", "사무직"),
+    ("service", "서비스직"),
+    ("sales", "판매직"),
+    ("production", "생산·제조직"),
+    ("construction", "건설·기능직"),
+    ("transport", "운전·운송직"),
+    ("agriculture", "농림축산어업"),
+    ("professional", "전문직 (의료·법률·교육 등)"),
+    ("public_official", "공무원"),
+    ("self_employed", "자영업"),
+    ("student", "학생"),
+    ("homemaker", "주부"),
+    ("unemployed", "무직"),
+    ("etc", "기타"),
+)
+
+OCCUPATION_LABELS = dict(OCCUPATIONS)
+
 
 class User(Base):
     __tablename__ = "users"
@@ -70,7 +90,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
     display_name: Mapped[str] = mapped_column(String, nullable=False)
     role: Mapped[str] = mapped_column(String, nullable=False, default="requester")
-    rank: Mapped[str | None] = mapped_column(String)  # 직급
+    occupation: Mapped[str | None] = mapped_column(String)  # 직종 (OCCUPATIONS 코드)
     contact: Mapped[str | None] = mapped_column(String)  # 연락처
     # 사용자의 활동 지역. 사건의 '발생 지역'과는 별개이며(사건은 폼에서 직접 입력),
     # 신규 사건 작성 시 지역 셀렉트의 기본값으로만 쓰인다.
@@ -88,6 +108,14 @@ class User(Base):
     @property
     def role_label(self) -> str:
         return USER_ROLE_LABELS.get(self.role, self.role)
+
+    @property
+    def occupation_label(self) -> str:
+        """구버전 자유 텍스트 직급이 남아 있는 계정도 깨지지 않도록, 알려진 코드가 아니면
+        저장된 값을 그대로 보여준다."""
+        if not self.occupation:
+            return ""
+        return OCCUPATION_LABELS.get(self.occupation, self.occupation)
 
 
 class UserSession(Base):
@@ -153,7 +181,7 @@ class Incident(Base):
     # 구조화된 신고 항목. statement는 이 항목들을 합쳐 만든 분석 대상 원문이며,
     # citations의 char offset이 statement를 기준으로 하므로 저장 후 변경하지 않는다.
     reporter_name: Mapped[str | None] = mapped_column(String)  # 작성자 이름
-    reporter_rank: Mapped[str | None] = mapped_column(String)  # 작성자 직급
+    reporter_occupation: Mapped[str | None] = mapped_column(String)  # 작성자 직종 (레이블 텍스트 스냅샷)
     reporter_contact: Mapped[str | None] = mapped_column(String)  # 작성자 연락처
     reporter_info: Mapped[str | None] = mapped_column(Text)  # (구버전) 통합 인적사항
     occurred_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True))  # 사고일시
@@ -192,7 +220,7 @@ class Incident(Base):
 
     @property
     def reporter_summary(self) -> str:
-        parts = [p for p in (self.reporter_name, self.reporter_rank, self.reporter_contact) if p]
+        parts = [p for p in (self.reporter_name, self.reporter_occupation, self.reporter_contact) if p]
         return " / ".join(parts) if parts else (self.reporter_info or "")
 
     @property

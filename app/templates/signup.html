@@ -36,8 +36,13 @@
 
             <div class="field-row">
               <div class="field">
-                <label class="field-label" for="rank">직급</label>
-                <input class="text-input" type="text" id="rank" name="rank" value="{{ rank or '' }}" placeholder="예) 검사반장">
+                <label class="field-label" for="occupation">직종</label>
+                <select id="occupation" name="occupation">
+                  <option value="">선택 안 함</option>
+                  {% for code, label in occupations %}
+                  <option value="{{ code }}" {{ "selected" if occupation == code else "" }}>{{ label }}</option>
+                  {% endfor %}
+                </select>
               </div>
               <div class="field">
                 <label class="field-label" for="contact">연락처</label>

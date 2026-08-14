@@ -44,7 +44,7 @@ def request_page(
     user: User = Depends(require_login),
     session: Session = Depends(get_session),
 ):
-    # 이름/직급/연락처는 프로필에서 가져와 보여주기만 한다. 반면 '사건 발생 지역'은
+    # 이름/직종/연락처는 프로필에서 가져와 보여주기만 한다. 반면 '사건 발생 지역'은
     # 신고자 소속과 다를 수 있으므로 프로필에서 파생하지 않고 폼에서 직접 받는다
     # (프로필 지역은 셀렉트의 기본 선택값으로만 쓴다).
     # (미들웨어가 넘겨준 user는 detached라 관계 접근을 위해 세션에서 다시 읽는다)
@@ -56,7 +56,7 @@ def request_page(
             "active": "request",
             "profile": {
                 "name": profile.display_name,
-                "rank": profile.rank,
+                "occupation": profile.occupation_label,
                 "contact": profile.contact,
                 "region": profile.sigungu.full_name if profile.sigungu else None,
             },
@@ -162,7 +162,7 @@ def create_incident(
     user: User = Depends(require_login),
     session: Session = Depends(get_session),
 ):
-    # 작성자 정보(이름/직급/연락처)는 여전히 프로필에서 가져온다 — 클라이언트 값을 신뢰하면
+    # 작성자 정보(이름/직종/연락처)는 여전히 프로필에서 가져온다 — 클라이언트 값을 신뢰하면
     # 타인을 사칭한 접수가 가능해지기 때문이다. 반면 '사건 발생 지역'은 신고자 소속과 무관하게
     # 어디서든 신고할 수 있어야 하므로 폼 값을 쓰되, 아래에서 실재하는 지역인지 검증한다.
     profile = session.get(User, user.id)
@@ -180,11 +180,11 @@ def create_incident(
         file_payloads.append((f.filename, f.content_type or "application/octet-stream", contents))
 
     reporter_name = profile.display_name
-    reporter_rank = profile.rank or ""
+    reporter_occupation = profile.occupation_label
     reporter_contact = profile.contact or ""
 
     occurred = _parse_occurred_at(occurred_at)
-    reporter_summary = " / ".join(p for p in (reporter_name, reporter_rank, reporter_contact) if p)
+    reporter_summary = " / ".join(p for p in (reporter_name, reporter_occupation, reporter_contact) if p)
     statement = _compose_statement(
         reporter_summary=reporter_summary,
         occurred_at=occurred,
@@ -212,7 +212,7 @@ def create_incident(
         sigungu_code=region.code,
         category_id=category.id if category else None,
         reporter_name=reporter_name or None,
-        reporter_rank=reporter_rank or None,
+        reporter_occupation=reporter_occupation or None,
         reporter_contact=reporter_contact or None,
         occurred_at=occurred,
         location=location.strip() or None,

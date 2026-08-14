@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import SESSION_COOKIE, SESSION_TTL, create_session, hash_password, revoke_session, verify_password
 from app.db import get_session
-from app.models import User
+from app.models import OCCUPATIONS, User
 from app.routers.regions import sido_list, sigungu_list
 from app.templating import templates
 
@@ -91,6 +91,7 @@ def signup_page(request: Request, session: Session = Depends(get_session)):
             "hide_nav": True,
             "sido_list": sido_list(session),
             "sigungu_list": sigungu_list(session),
+            "occupations": OCCUPATIONS,
         },
     )
 
@@ -103,7 +104,7 @@ def signup(
     password_confirm: str = Form(...),
     display_name: str = Form(...),
     role: str = Form("requester"),
-    rank: str = Form(""),
+    occupation: str = Form(""),
     contact: str = Form(""),
     sido_code: str = Form(""),
     sigungu_code: str = Form(""),
@@ -119,10 +120,11 @@ def signup(
                 "hide_nav": True,
                 "sido_list": sido_list(session),
                 "sigungu_list": sigungu_list(session),
+                "occupations": OCCUPATIONS,
                 "error": message,
                 "username": username,
                 "display_name": display_name,
-                "rank": rank,
+                "occupation": occupation,
                 "contact": contact,
             },
             status_code=400,
@@ -136,6 +138,8 @@ def signup(
         return fail("비밀번호가 일치하지 않습니다.")
     if role not in ("requester", "manager"):
         return fail("잘못된 역할입니다.")
+    if occupation and occupation not in dict(OCCUPATIONS):
+        return fail("올바르지 않은 직종입니다.")
     if not sido_code:
         return fail("활동 지역(시·도)을 선택해 주세요.")
     if not sigungu_code:
@@ -150,7 +154,7 @@ def signup(
         password_hash=hash_password(password),
         display_name=display_name.strip() or username,
         role=role,
-        rank=rank.strip() or None,
+        occupation=occupation or None,
         contact=contact.strip(),
         sido_code=sido_code,
         sigungu_code=sigungu_code,

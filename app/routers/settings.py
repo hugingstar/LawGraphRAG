@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import require_login, verify_password, hash_password
 from app.db import get_session
-from app.models import User
+from app.models import OCCUPATIONS, User
 from app.routers.regions import sido_list, sigungu_list
 from app.templating import templates
 
@@ -26,6 +26,7 @@ def settings_page(
             "profile": profile,
             "sido_list": sido_list(session),
             "sigungu_list": sigungu_list(session),
+            "occupations": OCCUPATIONS,
         },
     )
 
@@ -34,7 +35,7 @@ def settings_page(
 def update_settings(
     request: Request,
     display_name: str = Form(...),
-    rank: str = Form(""),
+    occupation: str = Form(""),
     contact: str = Form(""),
     sido_code: str = Form(""),
     sigungu_code: str = Form(""),
@@ -53,7 +54,7 @@ def update_settings(
         "username": profile.username,
         "role_label": profile.role_label,
         "display_name": display_name,
-        "rank": rank,
+        "occupation": occupation,
         "contact": contact,
         "sido_code": sido_code or None,
         "sigungu_code": sigungu_code or None,
@@ -68,6 +69,7 @@ def update_settings(
                 "profile": submitted if is_error else profile,
                 "sido_list": sidos,
                 "sigungu_list": sigungus,
+                "occupations": OCCUPATIONS,
                 "error": message if is_error else None,
                 "success": message if not is_error else None,
             },
@@ -78,6 +80,8 @@ def update_settings(
         return render("이름을 입력해 주세요.", True)
     if not contact.strip():
         return render("연락처를 입력해 주세요.", True)
+    if occupation and occupation not in dict(OCCUPATIONS):
+        return render("올바르지 않은 직종입니다.", True)
 
     if new_password or new_password_confirm or current_password:
         if not verify_password(current_password, profile.password_hash):
@@ -89,7 +93,7 @@ def update_settings(
         profile.password_hash = hash_password(new_password)
 
     profile.display_name = display_name.strip()
-    profile.rank = rank.strip() or None
+    profile.occupation = occupation or None
     profile.contact = contact.strip()
     profile.sido_code = sido_code or None
     profile.sigungu_code = sigungu_code or None

@@ -29,7 +29,7 @@ TEST_ACCOUNTS = [
         "password": "1111",
         "display_name": "김신청",
         "role": "requester",
-        "rank": "검사반장",
+        "occupation": "production",
         "contact": "010-2345-6789",
         "sigungu_code": "37011",  # 경상북도 포항시남구
     },
@@ -39,7 +39,7 @@ TEST_ACCOUNTS = [
         "password": "1111",
         "display_name": "이물류",
         "role": "requester",
-        "rank": "물류담당",
+        "occupation": "transport",
         "contact": "010-2222-3333",
         "sigungu_code": "37050",  # 경상북도 구미시
     },
@@ -49,7 +49,7 @@ TEST_ACCOUNTS = [
         "password": "1111",
         "display_name": "최검사",
         "role": "requester",
-        "rank": "품질검사원",
+        "occupation": "production",
         "contact": "010-3333-4444",
         "sigungu_code": "36060",  # 전라남도 광양시
     },
@@ -58,7 +58,7 @@ TEST_ACCOUNTS = [
         "password": "1111",
         "display_name": "정설비",
         "role": "requester",
-        "rank": "설비담당",
+        "occupation": "production",
         "contact": "010-4444-5555",
         "sigungu_code": "11010",  # 서울특별시 종로구
     },
@@ -67,7 +67,7 @@ TEST_ACCOUNTS = [
         "password": "1111",
         "display_name": "박안전",
         "role": "manager",
-        "rank": "안전보건팀장",
+        "occupation": "professional",
         "contact": "010-9876-5432",
         "sigungu_code": "11010",  # 서울특별시 종로구
     },
@@ -76,7 +76,7 @@ TEST_ACCOUNTS = [
         "password": "1111",
         "display_name": "한관리",
         "role": "manager",
-        "rank": "안전관리자",
+        "occupation": "professional",
         "contact": "010-5555-6666",
         "sigungu_code": "29010",  # 세종특별자치시
     },
@@ -101,7 +101,7 @@ def seed_reference_data(session: Session) -> None:
             session.add(user)
 
         # 이미 있는 계정이라도 프로필이 비어 있으면 채워준다(컬럼이 나중에 추가되었기 때문).
-        user.rank = user.rank or account["rank"]
+        user.occupation = user.occupation or account["occupation"]
         user.contact = user.contact or account["contact"]
         user.sigungu_code = user.sigungu_code or account["sigungu_code"]
         user.sido_code = user.sido_code or account["sigungu_code"][:2]
