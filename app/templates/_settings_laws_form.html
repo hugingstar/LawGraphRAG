@@ -1,0 +1,35 @@
+<form method="post" action="/settings/laws" data-law-limit="{{ law_limit }}" id="law-activation-form">
+  <div class="law-toggle-save-bar" data-law-toggle-savebar>
+    <span data-law-toggle-count><b>{{ enabled_count }}</b> / {{ law_limit }}개 선택됨</span>
+    <button type="submit">저장</button>
+  </div>
+
+  <div class="law-toggle-actions">
+    <button type="button" class="btn-link" data-law-toggle-all="false">전체 해제</button>
+  </div>
+
+  {% if law_groups %}
+  {% for group_name, group_laws in law_groups %}
+  {% set group_checked = group_laws|selectattr('id', 'in', checked_ids)|list %}
+  <details class="law-toggle-group" {% if group_checked %}open{% endif %}>
+    <summary class="law-toggle-group-title">
+      {{ group_name }}
+      <span class="law-toggle-group-count">
+        {{ group_checked|length }}/{{ group_laws|length }}개 선택됨
+      </span>
+    </summary>
+    <div class="law-toggle-grid">
+      {% for law in group_laws %}
+      <label class="law-toggle-item">
+        <input type="hidden" name="known_law_ids" value="{{ law.id }}">
+        <input type="checkbox" name="law_ids" value="{{ law.id }}" {{ "checked" if law.id in checked_ids else "" }}>
+        <span>{{ law.law_name }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </details>
+  {% endfor %}
+  {% else %}
+  <p class="empty-state">아직 수집된 법령이 없습니다.</p>
+  {% endif %}
+</form>

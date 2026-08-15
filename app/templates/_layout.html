@@ -63,6 +63,19 @@
     </footer>
   </div>
 
+  <dialog id="law-activation-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>법 활성화</h2>
+        <button type="button" class="btn-close" data-close-law-modal aria-label="닫기">×</button>
+      </div>
+      <div id="law-activation-modal-body">
+        <p class="empty-state">로딩 중...</p>
+      </div>
+    </div>
+  </dialog>
+  <script src="/static/law_modal.js?v={{ v }}"></script>
+
   {% block scripts %}{% endblock %}
 </body>
 </html>

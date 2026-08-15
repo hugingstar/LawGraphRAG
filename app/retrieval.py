@@ -14,7 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.embeddings import embed_queries
 from app.graph_retrieval import graph_expand
-from app.models import Article, ArticleChunk, Law, LawCategory
+from app.law_catalog import selected_law_ids
+from app.models import Article, ArticleChunk, Law, LawCategory, UserLawSelection
 
 RRF_K = 60
 GRAPH_SEED_COUNT = 3
@@ -29,29 +30,35 @@ class RetrievedArticle:
     score: float
 
 
-def _apply_domain_filter(stmt, domain_codes: list[str] | None):
+def _apply_domain_filter(stmt, domain_codes: list[str] | None, user_id: int):
+    # 이 사용자가 설정 > 법 활성화에서 켜 둔 법으로만 후보를 좁힌다 — 법령 수가 늘어날수록
+    # 이 필터가 벡터/trigram 후보 스캔 범위를 줄여 조회 성능을 좌우한다.
+    stmt = (
+        stmt.join(Article, ArticleChunk.article_id == Article.id)
+        .join(Law, Article.law_id == Law.id)
+        .join(UserLawSelection, UserLawSelection.law_id == Law.id)
+        .where(UserLawSelection.user_id == user_id)
+    )
     if not domain_codes:
         return stmt
-    return stmt.join(Article, ArticleChunk.article_id == Article.id).join(Law, Article.law_id == Law.id).join(
-        LawCategory, Law.category_id == LawCategory.id
-    ).where(LawCategory.code.in_(domain_codes))
+    return stmt.join(LawCategory, Law.category_id == LawCategory.id).where(LawCategory.code.in_(domain_codes))
 
 
 def _vector_candidates(
-    session: Session, query_vector: list[float], limit: int, domain_codes: list[str] | None = None
+    session: Session, query_vector: list[float], limit: int, user_id: int, domain_codes: list[str] | None = None
 ) -> list[int]:
     stmt = select(ArticleChunk.id)
-    stmt = _apply_domain_filter(stmt, domain_codes)
+    stmt = _apply_domain_filter(stmt, domain_codes, user_id)
     stmt = stmt.order_by(ArticleChunk.embedding.cosine_distance(query_vector)).limit(limit)
     rows = session.execute(stmt).all()
     return [r[0] for r in rows]
 
 
 def _trigram_candidates(
-    session: Session, query_text: str, limit: int, domain_codes: list[str] | None = None
+    session: Session, query_text: str, limit: int, user_id: int, domain_codes: list[str] | None = None
 ) -> list[int]:
     stmt = select(ArticleChunk.id)
-    stmt = _apply_domain_filter(stmt, domain_codes)
+    stmt = _apply_domain_filter(stmt, domain_codes, user_id)
     stmt = stmt.order_by(func.similarity(ArticleChunk.chunk_text, query_text).desc()).limit(limit)
     rows = session.execute(stmt).all()
     return [r[0] for r in rows]
@@ -60,14 +67,15 @@ def _trigram_candidates(
 def hybrid_search(
     session: Session,
     query_text: str,
+    user_id: int,
     top_k: int = 8,
     candidate_pool: int = 30,
     domain_codes: list[str] | None = None,
 ) -> list[RetrievedArticle]:
     query_vector = embed_queries([query_text])[0]
 
-    vector_ids = _vector_candidates(session, query_vector, candidate_pool, domain_codes)
-    trigram_ids = _trigram_candidates(session, query_text, candidate_pool, domain_codes)
+    vector_ids = _vector_candidates(session, query_vector, candidate_pool, user_id, domain_codes)
+    trigram_ids = _trigram_candidates(session, query_text, candidate_pool, user_id, domain_codes)
 
     rrf_scores: dict[int, float] = {}
     for rank, chunk_id in enumerate(vector_ids):
@@ -77,9 +85,10 @@ def hybrid_search(
 
     # 분야 필터로 후보가 하나도 안 걸리면(분류가 애매하거나 틀렸을 가능성) 필터 없이
     # 전체 검색으로 폴백한다 — graph_expand와 동일하게, 이 필터도 검색 결과를 절대
-    # 비게 만들어서는 안 된다.
+    # 비게 만들어서는 안 된다. (활성화한 법 자체가 없는 경우는 폴백하지 않는다 — 사용자가
+    # 아직 검색 대상 법을 하나도 고르지 않았다는 뜻이므로 결과가 없는 게 맞다.)
     if not rrf_scores and domain_codes:
-        return hybrid_search(session, query_text, top_k, candidate_pool, domain_codes=None)
+        return hybrid_search(session, query_text, user_id, top_k, candidate_pool, domain_codes=None)
 
     if not rrf_scores:
         return []
@@ -106,24 +115,31 @@ def hybrid_search(
             RetrievedArticle(article=article, law=article.law, chunk_text=chunk.chunk_text, score=score)
         )
 
-    results.extend(_graph_expanded_results(session, results))
+    results.extend(_graph_expanded_results(session, results, user_id))
     return results
 
 
-def _graph_expanded_results(session: Session, seed_results: list[RetrievedArticle]) -> list[RetrievedArticle]:
-    """기존 벡터+trigram 결과보다 항상 낮은 점수로, 그래프상 관련 조문을 덧붙인다."""
+def _graph_expanded_results(
+    session: Session, seed_results: list[RetrievedArticle], user_id: int
+) -> list[RetrievedArticle]:
+    """기존 벡터+trigram 결과보다 항상 낮은 점수로, 그래프상 관련 조문을 덧붙인다.
+
+    그래프 확장은 Neo4j 전체를 대상으로 도니, 이 사용자가 설정 > 법 활성화에서 켜지 않은
+    법의 조문까지 딸려 올 수 있다. 그런 조문은 애초에 검색 대상이 아니어야 하므로 여기서
+    한 번 더 걸러낸다."""
     if not seed_results:
         return []
 
     seed_articles = [r.article for r in seed_results[:GRAPH_SEED_COUNT]]
     related_articles = graph_expand(session, seed_articles, limit=GRAPH_EXTRA_LIMIT)
+    enabled_law_ids = selected_law_ids(session, user_id)
 
     seen_article_ids = {r.article.id for r in seed_results}
     lowest_score = min(r.score for r in seed_results)
 
     extra = []
     for article in related_articles:
-        if article.id in seen_article_ids:
+        if article.id in seen_article_ids or article.law_id not in enabled_law_ids:
             continue
         seen_article_ids.add(article.id)
         chunk_text = article.chunks[0].chunk_text if article.chunks else article.full_text[:500]
@@ -147,6 +163,7 @@ from langchain_core.documents import Document
 class HybridLawOwlyRetriever(BaseRetriever):
     """LangChain BaseRetriever 구현체로, 내부적으로 기존 hybrid_search를 호출합니다."""
     session: Any = Field(exclude=True)
+    user_id: int
     top_k: int = 8
     candidate_pool: int = 30
     domain_codes: list[str] | None = None
@@ -156,7 +173,9 @@ class HybridLawOwlyRetriever(BaseRetriever):
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> list[Document]:
-        results = hybrid_search(self.session, query, self.top_k, self.candidate_pool, self.domain_codes)
+        results = hybrid_search(
+            self.session, query, self.user_id, self.top_k, self.candidate_pool, self.domain_codes
+        )
         docs = []
         for r in results:
             doc = Document(

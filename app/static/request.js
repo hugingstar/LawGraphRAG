@@ -31,11 +31,12 @@ function clearInputs() {
 }
 
 const analyzeBtn = document.getElementById("analyze-btn");
-if (analyzeBtn)
-analyzeBtn.addEventListener("click", async () => {
+const draftBtn = document.getElementById("draft-btn");
+
+async function submitIncident(isDraft) {
   const statusEl = document.getElementById("status");
   const resultEl = document.getElementById("result");
-  const btn = document.getElementById("analyze-btn");
+  const btn = isDraft ? draftBtn : analyzeBtn;
   const background = document.getElementById("background").value.trim();
 
   statusEl.classList.remove("status-error");
@@ -48,7 +49,7 @@ analyzeBtn.addEventListener("click", async () => {
     return;
   }
 
-  if (!background) {
+  if (!isDraft && !background) {
     statusEl.classList.add("status-error");
     statusEl.textContent = "경위는 반드시 입력해야 합니다.";
     document.getElementById("background").focus();
@@ -59,42 +60,70 @@ analyzeBtn.addEventListener("click", async () => {
   for (const [name, elementId] of Object.entries(FIELDS)) {
     formData.append(name, document.getElementById(elementId).value.trim());
   }
+  if (isDraft) {
+    formData.append("is_draft", "true");
+  }
   if (fileInput) {
     [...fileInput.files].forEach((f) => formData.append("files", f));
   }
 
-  btn.disabled = true;
+  const incidentIdStr = document.getElementById("incident-id")?.value;
+  const url = incidentIdStr ? `/api/incidents/${incidentIdStr}/edit` : "/api/incidents";
+
+  if (analyzeBtn) analyzeBtn.disabled = true;
+  if (draftBtn) draftBtn.disabled = true;
   btn.setAttribute("aria-busy", "true");
-  statusEl.textContent = "분석 및 접수 중...";
+  statusEl.textContent = isDraft ? "임시 저장 중..." : "분석 및 접수 중...";
   resultEl.hidden = true;
 
   try {
-    const resp = await fetch("/api/incidents", { method: "POST", body: formData });
+    const resp = await fetch(url, { method: "POST", body: formData });
     if (!resp.ok) {
       const detail = await resp.json().catch(() => null);
       throw new Error(detail && detail.detail ? detail.detail : `서버 오류 (${resp.status})`);
     }
 
     const incident = await resp.json();
-    const metaParts = [incident.region, incident.category].filter(Boolean);
-    document.getElementById("result-meta").textContent =
-      `${metaParts.join(" · ")} · ${new Date(incident.created_at).toLocaleString("ko-KR")} 접수됨 — 관리자 검토가 요청되었습니다.`;
-    document.getElementById("highlighted-text").innerHTML = renderHighlighted(incident.statement, incident.citations);
-    document.getElementById("citation-list").innerHTML = incident.analysis_failed
-      ? '<li class="empty">자동 조문 분석에 실패했습니다. 요청은 정상 접수되었으며 안전부서가 직접 검토합니다.</li>'
-      : renderCitationList(incident.citations);
+    
+    if (isDraft) {
+      statusEl.textContent = "임시 저장되었습니다.";
+      statusEl.classList.remove("status-error");
+      
+      const idEl = document.getElementById("incident-id");
+      if (idEl) idEl.value = incident.id;
+    } else {
+      const metaParts = [incident.region, incident.category].filter(Boolean);
+      document.getElementById("result-meta").textContent =
+        `${metaParts.join(" · ")} · ${new Date(incident.created_at).toLocaleString("ko-KR")} 접수됨 — 관리자 검토가 요청되었습니다.`;
+      document.getElementById("highlighted-text").innerHTML = renderHighlighted(incident.statement, incident.citations);
+      document.getElementById("citation-list").innerHTML = incident.analysis_failed
+        ? '<li class="empty">자동 조문 분석에 실패했습니다. 요청은 정상 접수되었으며 안전부서가 직접 검토합니다.</li>'
+        : renderCitationList(incident.citations);
 
-    resultEl.hidden = false;
-    statusEl.textContent = "";
+      resultEl.hidden = false;
+      statusEl.textContent = "";
 
-    bindHighlightClicks(document.getElementById("highlighted-text"));
-    clearInputs();
-    resultEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      bindHighlightClicks(document.getElementById("highlighted-text"));
+      clearInputs();
+      
+      const idEl = document.getElementById("incident-id");
+      if (idEl) idEl.value = "";
+      
+      resultEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   } catch (err) {
     statusEl.classList.add("status-error");
     statusEl.textContent = `오류: ${err.message}`;
   } finally {
-    btn.disabled = false;
+    if (analyzeBtn) analyzeBtn.disabled = false;
+    if (draftBtn) draftBtn.disabled = false;
     btn.removeAttribute("aria-busy");
   }
-});
+}
+
+if (analyzeBtn) {
+  analyzeBtn.addEventListener("click", () => submitIncident(false));
+}
+if (draftBtn) {
+  draftBtn.addEventListener("click", () => submitIncident(true));
+}

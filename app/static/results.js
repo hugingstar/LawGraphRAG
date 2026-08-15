@@ -234,6 +234,10 @@ function renderList(incidents) {
   listEl.querySelectorAll(".incident-item").forEach((item) => {
     const incident = incidents.find((i) => String(i.id) === item.dataset.id);
     item.querySelector(".incident-summary").addEventListener("click", () => {
+      if (incident.status === "draft") {
+        window.location.href = `/request?incident_id=${incident.id}`;
+        return;
+      }
       const expanded = item.classList.toggle("expanded");
       const detail = item.querySelector(".incident-detail");
       if (expanded && !detail.dataset.loaded) {

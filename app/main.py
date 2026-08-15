@@ -103,7 +103,7 @@ def index(
             "request": request,
             "active": "lookup",
             "wide": True,
-            "available_laws": available_law_names(session),
+            "available_laws": available_law_names(session, user.id),
         },
     )
 
@@ -114,7 +114,7 @@ def analyze(
     user: User = Depends(require_login),
     session: Session = Depends(get_session),
 ):
-    citations = annotate_text(session, text)
+    citations = annotate_text(session, text, user.id)
     return {
         "text": text,
         "citations": [citation_to_dict(c) for c in citations],
@@ -130,10 +130,12 @@ def analyze_stream(text: str = Form(...), user: User = Depends(require_login)):
     그래서 세션을 이 함수 안에서 직접 열고 제너레이터의 finally에서 닫는다.
     """
 
+    user_id = user.id
+
     def generate():
         session = SessionLocal()
         try:
-            for kind, payload in annotate_text_stream(session, text):
+            for kind, payload in annotate_text_stream(session, text, user_id):
                 if kind == "citation":
                     event = {"type": "citation", "citation": citation_to_dict(payload)}
                 else:  # "done"
@@ -145,3 +147,5 @@ def analyze_stream(text: str = Form(...), user: User = Depends(require_login)):
             session.close()
 
     return StreamingResponse(generate(), media_type="application/x-ndjson")
+
+

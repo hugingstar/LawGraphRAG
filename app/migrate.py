@@ -98,6 +98,17 @@ _STATEMENTS = [
     # --- 증분 동기화(개정/폐지분만 처리)를 위한 컬럼 ---
     "ALTER TABLE laws ADD COLUMN IF NOT EXISTS mst TEXT",
     "ALTER TABLE laws ADD COLUMN IF NOT EXISTS repealed_at TIMESTAMPTZ",
+    # --- 법 활성화(설정에서 검색 대상 법을 좁혀 조회 성능을 높이는 기능) ---
+    # 처음에는 laws.is_enabled라는 전역 컬럼으로 구현했지만, 계정마다 다른 법을 고를 수
+    # 있어야 하고 재로그인 후에도 "그 사람이" 고른 조합이 남아야 하므로 사용자별 테이블로
+    # 옮긴다. 옛 컬럼은 더 이상 쓰이지 않으므로 제거한다.
+    "ALTER TABLE laws DROP COLUMN IF EXISTS is_enabled",
+    """CREATE TABLE IF NOT EXISTS user_law_selections (
+        user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        law_id  BIGINT NOT NULL REFERENCES laws(id) ON DELETE CASCADE,
+        PRIMARY KEY (user_id, law_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_user_law_selections_user_id ON user_law_selections(user_id)",
     """DO $$
     DECLARE col TEXT;
     BEGIN

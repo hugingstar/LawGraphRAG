@@ -29,7 +29,7 @@ def dashboard_page(
             "wide": True,
             "default_start": (today - datetime.timedelta(days=30)).isoformat(),
             "default_end": today.isoformat(),
-            "available_laws": available_law_names(session),
+            "available_laws": available_law_names(session, user.id),
         },
     )
 

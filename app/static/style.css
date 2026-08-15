@@ -639,8 +639,196 @@ mark:hover {
 
 /* ---- 설정 ---- */
 
+.settings-layout {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.settings-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  position: sticky;
+  top: 1rem;
+}
+
+.settings-sidebar a {
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--fg-soft);
+  text-decoration: none;
+}
+
+.settings-sidebar a:hover {
+  background: var(--bg);
+}
+
+.settings-sidebar a.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.settings-content {
+  min-width: 0;
+}
+
 .settings-card {
   max-width: 640px;
+}
+
+.law-toggle-card {
+  max-width: none;
+}
+
+.law-toggle-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.law-toggle-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.law-toggle-group {
+  border-bottom: 1px solid var(--border);
+}
+
+.law-toggle-group:first-of-type {
+  border-top: 1px solid var(--border);
+}
+
+.law-toggle-group-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.75rem 0.25rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--fg);
+  cursor: pointer;
+  list-style: none;
+}
+
+.law-toggle-group-title::-webkit-details-marker {
+  display: none;
+}
+
+.law-toggle-group-title::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.law-toggle-group[open] > .law-toggle-group-title::before {
+  transform: rotate(90deg);
+}
+
+.law-toggle-group-title:hover {
+  color: var(--accent);
+}
+
+.law-toggle-group-count {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.law-toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0.25rem 0.25rem 1rem;
+}
+
+.law-toggle-save-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: -1.5rem -1.5rem 1rem;
+  padding: 0.9rem 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.law-toggle-save-bar span {
+  font-size: 0.85rem;
+  color: var(--fg-soft);
+}
+
+.law-toggle-save-bar.is-dirty {
+  border-bottom-color: var(--accent);
+}
+
+.law-toggle-save-bar.is-dirty button[type="submit"] {
+  background: var(--accent);
+}
+
+.law-toggle-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--fg-soft);
+  cursor: pointer;
+}
+
+.law-toggle-item:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--fg);
+}
+
+.law-toggle-item span {
+  min-width: 0;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.law-toggle-item:has(input:disabled) {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1100px) {
+  .law-toggle-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-sidebar {
+    position: static;
+    flex-direction: row;
+  }
+
+  .law-toggle-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .text-input:disabled {
@@ -1406,6 +1594,34 @@ select:focus-visible {
   align-items: center;
   justify-content: center;
   min-height: 220px;
+}
+
+.law-list-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.law-list-head .card-title {
+  margin: 0;
+}
+
+.btn-link-small {
+  flex: 0 0 auto;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn-link-small:hover {
+  background: var(--accent);
+  color: white;
 }
 
 .law-list-card .law-list-hint {

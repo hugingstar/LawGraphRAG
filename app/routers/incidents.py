@@ -42,6 +42,7 @@ MAX_ATTACHMENTS_PER_REQUEST = 5
 @router.get("/request", response_class=HTMLResponse)
 def request_page(
     request: Request,
+    incident_id: int | None = None,
     user: User = Depends(require_login),
     session: Session = Depends(get_session),
 ):
@@ -50,6 +51,12 @@ def request_page(
     # (프로필 지역은 셀렉트의 기본 선택값으로만 쓴다).
     # (미들웨어가 넘겨준 user는 detached라 관계 접근을 위해 세션에서 다시 읽는다)
     profile = session.get(User, user.id)
+    
+    incident = None
+    if incident_id:
+        incident = session.get(Incident, incident_id)
+        if not incident or incident.created_by_user_id != user.id:
+            raise HTTPException(status_code=404, detail="사건을 찾을 수 없습니다.")
     return templates.TemplateResponse(
         "request.html",
         {
@@ -61,13 +68,14 @@ def request_page(
                 "contact": profile.contact,
                 "region": profile.sigungu.full_name if profile.sigungu else None,
             },
-            "default_sido_code": profile.sido_code,
-            "default_sigungu_code": profile.sigungu_code,
+            "default_sido_code": incident.sido_code if incident else profile.sido_code,
+            "default_sigungu_code": incident.sigungu_code if incident else profile.sigungu_code,
             "sido_list": sido_list(session),
             "sigungu_list": sigungu_list(session),
             "categories": session.query(IncidentCategory).order_by(IncidentCategory.id).all(),
-            "available_laws": available_law_names(session),
+            "available_laws": available_law_names(session, user.id),
             "wide": True,
+            "incident": incident,
         },
     )
 
@@ -156,10 +164,11 @@ def create_incident(
     category_id: str = Form(""),
     occurred_at: str = Form(""),
     location: str = Form(""),
-    background: str = Form(...),
+    background: str = Form(""),
     situation: str = Form(""),
     action_taken: str = Form(""),
     damage: str = Form(""),
+    is_draft: bool = Form(False),
     files: list[UploadFile] = File(default=[]),
     user: User = Depends(require_login),
     session: Session = Depends(get_session),
@@ -168,7 +177,7 @@ def create_incident(
     # 타인을 사칭한 접수가 가능해지기 때문이다. 반면 '사건 발생 지역'은 신고자 소속과 무관하게
     # 어디서든 신고할 수 있어야 하므로 폼 값을 쓰되, 아래에서 실재하는 지역인지 검증한다.
     profile = session.get(User, user.id)
-    if not background.strip():
+    if not is_draft and not background.strip():
         raise HTTPException(status_code=400, detail="경위는 반드시 입력해야 합니다.")
 
     region, category = _resolve_region_and_category(session, sido_code, sigungu_code, category_id)
@@ -201,13 +210,15 @@ def create_incident(
     # 그렇더라도 접수된 사고 신고 자체는 절대 유실되면 안 되므로, 분석 실패 시에는
     # 인용 없이 저장하고 안전부서가 수동으로 검토하도록 이력에 남긴다.
     analysis_failed = False
-    try:
-        citations = annotate_text(session, statement)
-    except Exception as exc:  # noqa: BLE001 - 어떤 실패든 신고 유실보다 낫다
-        session.rollback()
-        citations = []
-        analysis_failed = True
-        print(f"[incident] 자동 조문 분석 실패, 인용 없이 접수합니다: {exc}", flush=True)
+    citations = []
+    if not is_draft:
+        try:
+            citations = annotate_text(session, statement, user.id)
+        except Exception as exc:  # noqa: BLE001 - 어떤 실패든 신고 유실보다 낫다
+            session.rollback()
+            citations = []
+            analysis_failed = True
+            print(f"[incident] 자동 조문 분석 실패, 인용 없이 접수합니다: {exc}", flush=True)
 
     incident = Incident(
         sido_code=region.parent_code,
@@ -223,16 +234,16 @@ def create_incident(
         action_taken=action_taken.strip() or None,
         damage=damage.strip() or None,
         statement=statement,
-        status="review_requested",
+        status="draft" if is_draft else "review_requested",
         citations=[citation_to_dict(c) for c in citations],
         created_by_user_id=user.id,
     )
+    
+    note = "임시 저장" if is_draft else ("심층 검토 요청 접수 (자동 조문 분석 실패 — 담당자 수동 검토 필요)" if analysis_failed else "심층 검토 요청 접수")
     incident.events.append(
         IncidentEvent(
-            status="review_requested",
-            note="심층 검토 요청 접수 (자동 조문 분석 실패 — 담당자 수동 검토 필요)"
-            if analysis_failed
-            else "심층 검토 요청 접수",
+            status="draft" if is_draft else "review_requested",
+            note=note,
             actor_user_id=user.id,
         )
     )
@@ -249,7 +260,8 @@ def create_incident(
     session.add(incident)
     session.commit()
     session.refresh(incident)
-    sync_incident(incident)  # 실패해도 접수는 이미 확정되어 있다(graph_incidents 참고)
+    if not is_draft:
+        sync_incident(incident)  # 실패해도 접수는 이미 확정되어 있다(graph_incidents 참고)
     return {**incident_to_dict(incident), "analysis_failed": analysis_failed}
 
 
@@ -284,10 +296,11 @@ def edit_incident(
     incident_id: int,
     occurred_at: str = Form(""),
     location: str = Form(""),
-    background: str = Form(...),
+    background: str = Form(""),
     situation: str = Form(""),
     action_taken: str = Form(""),
     damage: str = Form(""),
+    is_draft: bool = Form(False),
     user: User = Depends(require_login),
     session: Session = Depends(get_session),
 ):
@@ -302,7 +315,7 @@ def edit_incident(
         raise HTTPException(status_code=403, detail="본인이 작성한 요청만 수정할 수 있습니다.")
     if incident.status == "completed":
         raise HTTPException(status_code=400, detail="검토가 완료된 요청은 수정할 수 없습니다.")
-    if not background.strip():
+    if not is_draft and not background.strip():
         raise HTTPException(status_code=400, detail="경위는 반드시 입력해야 합니다.")
 
     occurred = _parse_occurred_at(occurred_at)
@@ -317,13 +330,16 @@ def edit_incident(
     )
 
     analysis_failed = False
-    try:
-        citations = annotate_text(session, statement)
-    except Exception as exc:  # noqa: BLE001 - 분석 실패해도 수정 내용은 반드시 저장한다
-        session.rollback()
-        citations = []
-        analysis_failed = True
-        print(f"[incident] 수정 후 재분석 실패, 기존 인용 없이 저장합니다: {exc}", flush=True)
+    citations = incident.citations or []
+    if not is_draft:
+        try:
+            new_citations = annotate_text(session, statement, user.id)
+            citations = [citation_to_dict(c) for c in new_citations]
+        except Exception as exc:  # noqa: BLE001 - 분석 실패해도 수정 내용은 반드시 저장한다
+            session.rollback()
+            citations = []
+            analysis_failed = True
+            print(f"[incident] 수정 후 재분석 실패, 기존 인용 없이 저장합니다: {exc}", flush=True)
 
     incident.occurred_at = occurred
     incident.location = location.strip() or None
@@ -332,20 +348,27 @@ def edit_incident(
     incident.action_taken = action_taken.strip() or None
     incident.damage = damage.strip() or None
     incident.statement = statement
-    if not analysis_failed:
-        incident.citations = [citation_to_dict(c) for c in citations]
+    incident.citations = citations
+
+    new_status = "draft" if is_draft else ("review_requested" if incident.status == "draft" else incident.status)
+    if incident.status != new_status:
+        incident.status = new_status
+        note = "임시 저장" if is_draft else "요청자가 임시 저장을 완료하고 심층 검토를 요청했습니다."
+    else:
+        note = "임시 저장 내용을 수정했습니다." if is_draft else "요청자가 신고 내용을 수정했습니다."
 
     session.add(
         IncidentEvent(
             incident_id=incident.id,
             status=incident.status,
-            note="요청자가 신고 내용을 수정했습니다.",
+            note=note,
             actor_user_id=user.id,
         )
     )
     session.commit()
     session.refresh(incident)
-    sync_incident(incident)  # 재분석으로 인용이 바뀌었을 수 있다
+    if not is_draft:
+        sync_incident(incident)  # 재분석으로 인용이 바뀌었을 수 있다
     return {**incident_to_dict(incident), "analysis_failed": analysis_failed}
 
 

@@ -56,6 +56,7 @@ function bindHighlightClicks(root) {
 }
 
 const STATUS_LABELS = {
+  draft: "임시 저장",
   review_requested: "검토 요청",
   in_review: "검토중",
   supplement_requested: "보완 요청",

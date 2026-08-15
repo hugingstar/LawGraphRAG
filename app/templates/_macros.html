@@ -22,12 +22,15 @@
 </div>
 {% endmacro %}
 
-{# "지금 이용 가능한 법 리스트" 카드. Advisor·나의 요청·전국 사건 모니터링 세 화면에서
-   똑같이 쓰므로 매크로로 모은다. 각 페이지 라우터가 available_laws(법령명 리스트)를 넘긴다. #}
+{# "활성화 된 법" 카드. Advisor·나의 요청·전국 사건 모니터링 세 화면에서 똑같이 쓰므로
+   매크로로 모은다. 각 페이지 라우터가 available_laws(법령명 리스트)를 넘긴다. #}
 {% macro law_list_card(available_laws) %}
 <section class="card law-list-card">
-  <h2 class="card-title">지금 이용 가능한 법 리스트</h2>
-  <p class="hint law-list-hint">현재 검색 대상으로 수집되어 있는 법령입니다.</p>
+  <div class="law-list-head">
+    <h2 class="card-title">활성화 된 법</h2>
+    <button type="button" class="btn-link-small" data-open-law-modal>법 활성화</button>
+  </div>
+  <p class="hint law-list-hint">아래 법을 우선순위로 두고 검색합니다.</p>
   {% if available_laws %}
   <ul class="law-list">
     {% for name in available_laws %}
@@ -38,4 +41,12 @@
   <p class="empty-state">아직 수집된 법령이 없습니다.</p>
   {% endif %}
 </section>
+{% endmacro %}
+
+{# 설정 페이지 좌측 사이드 메뉴. active_tab: 'profile' | 'laws' #}
+{% macro settings_sidebar(active_tab) %}
+<nav class="settings-sidebar">
+  <a href="/settings" class="{{ 'active' if active_tab == 'profile' else '' }}">내 정보</a>
+  <a href="/settings/laws" class="{{ 'active' if active_tab == 'laws' else '' }}">법 활성화</a>
+</nav>
 {% endmacro %}

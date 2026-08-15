@@ -6,6 +6,10 @@
         <p class="hint">로그인 계정의 개인정보를 직접 수정할 수 있습니다. 여기서 바꾼 정보는 다음 요청부터 "나의 요청"에 자동으로 반영됩니다.</p>
       </div>
 
+      <div class="settings-layout">
+      {{ macros.settings_sidebar('profile') }}
+      <div class="settings-content">
+
       <section class="card input-card settings-card">
         <form method="post" action="/settings">
           {% if error %}
@@ -111,6 +115,9 @@
           </div>
         </form>
       </section>
+
+      </div>
+      </div>
 {% endblock %}
 {% block scripts %}
   <script src="/static/regions.js?v={{ v }}"></script>

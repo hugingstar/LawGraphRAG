@@ -101,15 +101,16 @@ def _build_chain():
     return _PROMPT | llm.with_structured_output(_CitationsResponse)
 
 
-def _retrieve_chunk_data(session: Session, text: str, top_k: int):
+def _retrieve_chunk_data(session: Session, text: str, user_id: int, top_k: int):
     """문장을 청킹하고, 청크별 후보 조문을 순차 조회한다(세션 동시 사용을 피하기 위해 순차 처리).
 
     분야 분류는 전체 진술문 기준으로 한 번만 수행해 청크마다 LLM을 다시 부르지 않는다.
     분류에 실패하거나 애매하면 domain_codes가 None이 되어 기존과 동일하게 전체 검색으로 동작한다.
+    검색 대상 법 자체는 user_id로 좁힌다(설정 > 법 활성화에서 이 사용자가 고른 법만).
     """
     domain_codes = classify_query_domains(text)
     chunks = chunk_text(text, window_size=4, overlap=1)
-    retriever = HybridLawOwlyRetriever(session=session, top_k=top_k, domain_codes=domain_codes)
+    retriever = HybridLawOwlyRetriever(session=session, user_id=user_id, top_k=top_k, domain_codes=domain_codes)
 
     chunk_data = []
     for chunk in chunks:
@@ -159,8 +160,8 @@ def _citations_from_result(chunk, docs, parsed) -> list[Citation]:
     return result
 
 
-def annotate_text(session: Session, text: str, *, top_k: int = 6) -> list[Citation]:
-    chunk_data = _retrieve_chunk_data(session, text, top_k)
+def annotate_text(session: Session, text: str, user_id: int, *, top_k: int = 6) -> list[Citation]:
+    chunk_data = _retrieve_chunk_data(session, text, user_id, top_k)
     chain = _build_chain()
 
     citations: list[Citation] = []
@@ -171,7 +172,9 @@ def annotate_text(session: Session, text: str, *, top_k: int = 6) -> list[Citati
     return _merge_citations(citations)
 
 
-def annotate_text_stream(session: Session, text: str, *, top_k: int = 6) -> Iterator[tuple[str, object]]:
+def annotate_text_stream(
+    session: Session, text: str, user_id: int, *, top_k: int = 6
+) -> Iterator[tuple[str, object]]:
     """조문 인용을 찾는 대로 하나씩 내보낸다(실시간 표시용).
 
     청크별 LLM 호출은 병렬로 실행하되, `as_completed`로 먼저 끝난 것부터 바로 내보낸다
@@ -179,7 +182,7 @@ def annotate_text_stream(session: Session, text: str, *, top_k: int = 6) -> Iter
     각 청크 결과는 ("citation", Citation) 이벤트로, 전체가 끝나면 조문별로 겹치는 구간을
     합친 최종 목록을 ("done", list[Citation])으로 내보낸다.
     """
-    chunk_data = _retrieve_chunk_data(session, text, top_k)
+    chunk_data = _retrieve_chunk_data(session, text, user_id, top_k)
     chain = _build_chain()
 
     all_citations: list[Citation] = []

@@ -1,0 +1,35 @@
+{% extends "_layout.html" %}
+{% import "_macros.html" as macros %}
+{% block title %}법 활성화 - Law Owly{% endblock %}
+{% block content %}
+      <div class="hero">
+        <h1>설정</h1>
+        <p class="hint">검색에 사용할 법령을 직접 고르세요. 무료 티어는 최대 {{ law_limit }}개까지만 활성화할 수 있습니다.
+          꺼둔 법은 "지금 이용 가능한 법 리스트"와 검색 대상에서 빠지므로, 필요한 법만 골라 켜면 조회 성능이 좋아집니다.</p>
+      </div>
+
+      <div class="settings-layout">
+      {{ macros.settings_sidebar('laws') }}
+      <div class="settings-content">
+
+      <section class="card input-card settings-card law-toggle-card">
+        {% if error %}
+        <p class="form-error">{{ error }}</p>
+        {% endif %}
+        {% if success %}
+        <p class="form-success">{{ success }}</p>
+        {% endif %}
+
+        <div class="law-toggle-head">
+          <h2 class="card-title">법 활성화</h2>
+        </div>
+
+          {% include "_settings_laws_form.html" %}
+      </section>
+
+      </div>
+      </div>
+{% endblock %}
+{% block scripts %}
+  <script src="/static/settings_laws.js?v={{ v }}"></script>
+{% endblock %}

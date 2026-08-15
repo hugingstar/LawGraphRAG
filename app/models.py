@@ -29,6 +29,7 @@ class Base(DeclarativeBase):
 #   supplement_requested 내용이 부족해 신고자에게 보완 요청
 #   completed            검토 완료
 INCIDENT_STATUSES = (
+    "draft",
     "review_requested",
     "in_review",
     "supplement_requested",
@@ -37,6 +38,7 @@ INCIDENT_STATUSES = (
 )
 
 INCIDENT_STATUS_LABELS = {
+    "draft": "임시 저장",
     "review_requested": "검토 요청",
     "in_review": "검토중",
     "supplement_requested": "보완 요청",
@@ -323,6 +325,18 @@ class Law(Base):
 
     category: Mapped["LawCategory | None"] = relationship(back_populates="laws")
     articles: Mapped[list["Article"]] = relationship(back_populates="law", cascade="all, delete-orphan")
+
+
+class UserLawSelection(Base):
+    """설정 > 법 활성화에서 사용자가 직접 켠 법. 계정마다 따로 저장해 로그아웃 후 다시
+    로그인해도 그 사람이 마지막으로 고른 조합이 그대로 남는다(무료 티어는
+    app.law_catalog.FREE_TIER_LAW_LIMIT개까지). 켜지지 않은 법은 검색(하이브리드 검색의
+    벡터/trigram 후보 조회)과 "지금 이용 가능한 법 리스트"에서 빠진다."""
+
+    __tablename__ = "user_law_selections"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    law_id: Mapped[int] = mapped_column(ForeignKey("laws.id", ondelete="CASCADE"), primary_key=True)
 
 
 class Article(Base):
