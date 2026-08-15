@@ -10,6 +10,12 @@ from app.models import Law
 
 
 def available_law_names(session: Session) -> list[str]:
-    """TARGET_LAWS(app/ingest.py)의 목표 목록이 아니라, 실제로 수집이 끝나 검색 가능한
-    법령만 돌려준다 — 목표만 적어두면 아직 못 넣은 법이 '이용 가능'으로 보인다."""
-    return [name for (name,) in session.query(Law.law_name).order_by(Law.law_name).all()]
+    """실제로 수집이 끝나 검색 가능한 법령만 돌려준다. 폐지되어 조문이 비워진 법령
+    (Law.repealed_at)은 목록에서 제외한다."""
+    return [
+        name
+        for (name,) in session.query(Law.law_name)
+        .filter(Law.repealed_at.is_(None))
+        .order_by(Law.law_name)
+        .all()
+    ]

@@ -58,12 +58,15 @@ def _require_oc_key() -> str:
     return settings.law_oc_key
 
 
-def search_law(query: str, *, display: int = 100) -> list[dict]:
+def search_law(query: str, *, display: int = 100, page: int = 1) -> list[dict]:
     """법령명으로 검색해 후보 목록(법령ID/MST 포함)을 반환한다.
 
     display를 넉넉히 두는 이유는, 수집 측에서 '법령명 정확 일치'만 채택하기 때문이다.
     "민법"처럼 부분 일치하는 법령이 많은 이름은 목록이 잘리면 정작 원하는 법이 후보에서
     빠져 수집이 실패한다.
+
+    query=""(빈 문자열)이면 전체 법령을 대상으로 하므로, page와 함께 쓰면 전체 목록을
+    페이지네이션으로 순회할 수 있다(app.ingest.list_all_current_laws 참고).
     """
     params = {
         "OC": _require_oc_key(),
@@ -71,6 +74,7 @@ def search_law(query: str, *, display: int = 100) -> list[dict]:
         "type": "XML",
         "query": query,
         "display": display,
+        "page": page,
     }
     return _parse_search_response(_get_with_retry(SEARCH_URL, params).text)
 
@@ -102,6 +106,8 @@ def _parse_search_response(xml_text: str) -> list[dict]:
                 "mst": _text(law_el, "법령일련번호"),
                 "law_name": _text(law_el, "법령명한글"),
                 "law_type": _text(law_el, "법령구분명"),
+                "department": _text(law_el, "소관부처명"),
+                "current_yn": _text(law_el, "현행연혁코드"),
                 "promulgation_date": _text(law_el, "공포일자"),
                 "effective_date": _text(law_el, "시행일자"),
             }

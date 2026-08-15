@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.chunking import chunk_text
 from app.config import settings
+from app.law_category import classify_query_domains
 from app.law_links import article_url
 from app.retrieval import HybridLawOwlyRetriever
 
@@ -101,9 +102,14 @@ def _build_chain():
 
 
 def _retrieve_chunk_data(session: Session, text: str, top_k: int):
-    """문장을 청킹하고, 청크별 후보 조문을 순차 조회한다(세션 동시 사용을 피하기 위해 순차 처리)."""
+    """문장을 청킹하고, 청크별 후보 조문을 순차 조회한다(세션 동시 사용을 피하기 위해 순차 처리).
+
+    분야 분류는 전체 진술문 기준으로 한 번만 수행해 청크마다 LLM을 다시 부르지 않는다.
+    분류에 실패하거나 애매하면 domain_codes가 None이 되어 기존과 동일하게 전체 검색으로 동작한다.
+    """
+    domain_codes = classify_query_domains(text)
     chunks = chunk_text(text, window_size=4, overlap=1)
-    retriever = HybridLawOwlyRetriever(session=session, top_k=top_k)
+    retriever = HybridLawOwlyRetriever(session=session, top_k=top_k, domain_codes=domain_codes)
 
     chunk_data = []
     for chunk in chunks:

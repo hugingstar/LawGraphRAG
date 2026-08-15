@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.embeddings import embed_queries
 from app.graph_retrieval import graph_expand
-from app.models import Article, ArticleChunk, Law
+from app.models import Article, ArticleChunk, Law, LawCategory
 
 RRF_K = 60
 GRAPH_SEED_COUNT = 3
@@ -29,35 +29,57 @@ class RetrievedArticle:
     score: float
 
 
-def _vector_candidates(session: Session, query_vector: list[float], limit: int) -> list[int]:
-    rows = session.execute(
-        select(ArticleChunk.id)
-        .order_by(ArticleChunk.embedding.cosine_distance(query_vector))
-        .limit(limit)
-    ).all()
+def _apply_domain_filter(stmt, domain_codes: list[str] | None):
+    if not domain_codes:
+        return stmt
+    return stmt.join(Article, ArticleChunk.article_id == Article.id).join(Law, Article.law_id == Law.id).join(
+        LawCategory, Law.category_id == LawCategory.id
+    ).where(LawCategory.code.in_(domain_codes))
+
+
+def _vector_candidates(
+    session: Session, query_vector: list[float], limit: int, domain_codes: list[str] | None = None
+) -> list[int]:
+    stmt = select(ArticleChunk.id)
+    stmt = _apply_domain_filter(stmt, domain_codes)
+    stmt = stmt.order_by(ArticleChunk.embedding.cosine_distance(query_vector)).limit(limit)
+    rows = session.execute(stmt).all()
     return [r[0] for r in rows]
 
 
-def _trigram_candidates(session: Session, query_text: str, limit: int) -> list[int]:
-    rows = session.execute(
-        select(ArticleChunk.id)
-        .order_by(func.similarity(ArticleChunk.chunk_text, query_text).desc())
-        .limit(limit)
-    ).all()
+def _trigram_candidates(
+    session: Session, query_text: str, limit: int, domain_codes: list[str] | None = None
+) -> list[int]:
+    stmt = select(ArticleChunk.id)
+    stmt = _apply_domain_filter(stmt, domain_codes)
+    stmt = stmt.order_by(func.similarity(ArticleChunk.chunk_text, query_text).desc()).limit(limit)
+    rows = session.execute(stmt).all()
     return [r[0] for r in rows]
 
 
-def hybrid_search(session: Session, query_text: str, top_k: int = 8, candidate_pool: int = 30) -> list[RetrievedArticle]:
+def hybrid_search(
+    session: Session,
+    query_text: str,
+    top_k: int = 8,
+    candidate_pool: int = 30,
+    domain_codes: list[str] | None = None,
+) -> list[RetrievedArticle]:
     query_vector = embed_queries([query_text])[0]
 
-    vector_ids = _vector_candidates(session, query_vector, candidate_pool)
-    trigram_ids = _trigram_candidates(session, query_text, candidate_pool)
+    vector_ids = _vector_candidates(session, query_vector, candidate_pool, domain_codes)
+    trigram_ids = _trigram_candidates(session, query_text, candidate_pool, domain_codes)
 
     rrf_scores: dict[int, float] = {}
     for rank, chunk_id in enumerate(vector_ids):
         rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0.0) + 1.0 / (RRF_K + rank + 1)
     for rank, chunk_id in enumerate(trigram_ids):
         rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0.0) + 1.0 / (RRF_K + rank + 1)
+
+    # 분야 필터로 후보가 하나도 안 걸리면(분류가 애매하거나 틀렸을 가능성) 필터 없이
+    # 전체 검색으로 폴백한다 — graph_expand와 동일하게, 이 필터도 검색 결과를 절대
+    # 비게 만들어서는 안 된다.
+    if not rrf_scores and domain_codes:
+        return hybrid_search(session, query_text, top_k, candidate_pool, domain_codes=None)
 
     if not rrf_scores:
         return []
@@ -127,13 +149,14 @@ class HybridLawOwlyRetriever(BaseRetriever):
     session: Any = Field(exclude=True)
     top_k: int = 8
     candidate_pool: int = 30
-    
+    domain_codes: list[str] | None = None
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> list[Document]:
-        results = hybrid_search(self.session, query, self.top_k, self.candidate_pool)
+        results = hybrid_search(self.session, query, self.top_k, self.candidate_pool, self.domain_codes)
         docs = []
         for r in results:
             doc = Document(

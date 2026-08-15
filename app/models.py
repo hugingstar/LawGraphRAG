@@ -286,6 +286,19 @@ class IncidentAttachment(Base):
     uploaded_by: Mapped["User | None"] = relationship()
 
 
+class LawCategory(Base):
+    """법령 분야 대분류(민사/형사/노동/조세 등). 법령 수가 늘어날수록 검색을 이 분야로 먼저
+    좁혀야 관련 없는 분야의 조문이 벡터/그래프 검색 결과에 섞이지 않는다."""
+
+    __tablename__ = "law_categories"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+
+    laws: Mapped[list["Law"]] = relationship(back_populates="category")
+
+
 class Law(Base):
     __tablename__ = "laws"
 
@@ -293,12 +306,22 @@ class Law(Base):
     law_id: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     law_name: Mapped[str] = mapped_column(String, nullable=False)
     law_type: Mapped[str | None] = mapped_column(String)
+    # 소관부처명(법제처 API). 분야 분류의 보조 근거로 저장해 둔다(app/law_category.py).
+    department: Mapped[str | None] = mapped_column(String)
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("law_categories.id"))
+    # 법령일련번호(MST). 개정되면 법제처가 새 MST를 발급하므로, 목록 조회 시점의 MST가
+    # 저장된 값과 같으면 상세 조회 없이 건너뛸 수 있다(app.ingest.sync_all_laws).
+    mst: Mapped[str | None] = mapped_column(String)
+    # 현행 목록에서 더 이상 보이지 않게 된(폐지/실효) 시각. 조문은 지워도 이 법령 자체의
+    # 이력은 남겨 둔다.
+    repealed_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True))
     promulgation_date: Mapped[datetime.date | None] = mapped_column(Date)
     effective_date: Mapped[datetime.date | None] = mapped_column(Date)
     last_synced_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    category: Mapped["LawCategory | None"] = relationship(back_populates="laws")
     articles: Mapped[list["Article"]] = relationship(back_populates="law", cascade="all, delete-orphan")
 
 

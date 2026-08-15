@@ -10,7 +10,10 @@
 포함한다.
 
 법령은 산업안전 계열뿐 아니라 민법·형법·상법·민사소송법·형사소송법 등 주요 기본법과 교통·환경·
-재난 분야 법률까지 다룬다([app/ingest.py](app/ingest.py)의 `TARGET_LAWS`).
+재난 분야 법률까지 다루며, 법제처 현행 법령 전체를 대상으로 확장 중이다
+([app/ingest.py](app/ingest.py) `python -m app.ingest --all`). 법령은 분야(민사/형사/노동/
+산업안전 등, [app/law_category.py](app/law_category.py))로 분류되어 검색·그래프 확장을
+해당 분야로 먼저 좁힌다.
 
 ## 아키텍처
 
@@ -42,10 +45,12 @@ flowchart TD
     R_Dashboard --> MapView
 
     subgraph Data_Ingestion_Pipeline ["법령 수집 파이프라인 (ingest.py)"]
-        LawAPI["법제처 Open API"] -->|법령 XML 수집| Ingest["수집기 (ingest.py)"]
+        LawAPI["법제처 Open API"] -->|MST 변경분만 조회| Ingest["수집기 (ingest.py)<br/>sync_all_laws"]
+        Ingest -->|분야 분류| Category["분야 분류 (law_category.py)"]
         Ingest -->|문장 단위 분할| Chunking["분할기 (chunking.py)"]
         Chunking -->|LangChain HuggingFace| Embed["벡터 변환기 (embeddings.py)"]
         Embed -->|벡터화된 조문 저장| DB
+        Category -->|category_id| DB
     end
 
     subgraph Knowledge_Graph_Pipeline ["그래프 구축 파이프라인 (graph_ingest.py)"]
@@ -56,7 +61,9 @@ flowchart TD
     subgraph GraphRAG_Pipeline ["AI 분석 및 검색 파이프라인 (GraphRAG Pipeline)"]
         Statement["사고 진술문<br/>(직접 입력 /analyze, 또는 요청 작성·수정 시 statement)"] -->|입력 텍스트 전달| TextChunk["질의 분할 (chunking.py)"]
         TextChunk -->|청크별 질의| Retriever["검색기 (HybridLawOwlyRetriever)"]
-        Retriever -->|벡터+키워드 하이브리드 검색 RRF| DB
+        TextChunk -->|문서 전체 1회 분류| DomainClassify["분야 분류 (law_category.py)<br/>classify_query_domains"]
+        DomainClassify -->|domain_codes, 실패 시 필터 없음| Retriever
+        Retriever -->|벡터+키워드 하이브리드 검색 RRF, 분야로 우선 필터| DB
         DB -.->|후보 조문 반환| Retriever
         Retriever -->|상위 조문을 시드로 확장| GraphExpand["그래프 확장 (graph_retrieval.py)"]
         GraphExpand -->|REFERENCES·DEFINES·APPLIES_TO 등 1~2-hop 순회| Neo4j
@@ -119,9 +126,11 @@ flowchart TD
 우리가 검색할 "법률 책"들을 도서관(DB)에 미리 들이고, 꼼꼼하게 색인(Index)을 달아두는 준비 과정입니다.
 
 - **법제처 Open API (`ingest.py`)**: 
-  - **스토리텔링**: 도서관에 최신 법률 서적을 들여오는 과정입니다. 서비스 최초 실행 시 국가(법제처) 시스템에 접속해 `TARGET_LAWS`에 적힌 법령들(민법·형법·산업안전보건법·도로교통법 등)을 싹 가져옵니다.
-  - **업데이트 구조**: 법은 매년 바뀌기 마련입니다. 다시 수집 명령을 실행하면 조문 원문의 해시(`content_hash`)를 비교해 **내용이 바뀐 조문만** 다시 쪼개고 임베딩합니다. 수십 개 법령을 반복 수집해도 이미 넣어둔 것은 건너뛰므로, 중간에 멈췄다 이어서 돌리는 것이 안전합니다.
+  - **스토리텔링**: 도서관에 최신 법률 서적을 들여오는 과정입니다. `python -m app.ingest --all`을 실행하면 국가(법제처) 시스템에 접속해 현행 법령 전체를 싹 가져옵니다.
+  - **업데이트 구조**: 법은 매년 바뀌기 마련입니다. 인자 없이(`python -m app.ingest`) 다시 실행하면 **증분 동기화** 모드로 동작합니다 — 법령 목록의 MST(법령일련번호)가 저장된 값과 같은 법령은 상세 조회조차 하지 않고 건너뛰고, 개정되어 MST가 바뀐 법령만 다시 받아옵니다. 조문 단위로도 해시(`content_hash`)를 비교해 **내용이 바뀐 조문만** 다시 쪼개고 임베딩합니다. 현행 목록에서 아예 빠진(폐지된) 법령은 조문을 지워 검색 대상에서 제외합니다. 이렇게 처리 비용이 실제 개정·폐지 건수에만 비례하도록 만들어, 법령이 수천 건 규모로 늘어나도 정기 갱신 비용이 커지지 않습니다.
   - **오류 격리**: 법령 하나가 실패해도(API 오류, 이름 불일치) 나머지는 계속 수집하고, 마지막에 실패 목록을 모아 보여줍니다. 또한 법령명이 **정확히 일치**할 때만 수집합니다 — "민법"처럼 짧은 이름은 유사 법령이 수십 개라, 예전처럼 첫 번째 검색 결과를 그냥 쓰면 엉뚱한 법이 들어올 수 있기 때문입니다.
+
+- **분야 분류 (`law_category.py`)**: 법령이 수천 건 규모로 늘어나면 검색 결과에 무관한 분야의 조문이 섞이기 쉽습니다. 그래서 법령마다 민사·형사·노동·산업안전·부동산건설 등 16개 분야(`LawCategory`) 중 하나를 붙여둡니다. 분류는 LLM 호출 없이 법령명 접미사/소관부처명 기반 결정적 규칙(`classify_law`)으로 이루어져 즉시·무료로 처리되며, 매 기동 시 재계산되어 규칙이 다듬어지면 기존 법령에도 바로 반영됩니다.
 
 - **문장 분할 (`chunking.py`)**: 
   - **스토리텔링**: 두꺼운 법전 한 권을 통째로 꽂아두면 나중에 원하는 내용을 찾기 힘듭니다. 그래서 책을 한 장씩, 나아가 한 문단씩 쪼개어 보관하는 작업입니다.
@@ -147,7 +156,7 @@ flowchart TD
 #### 3. AI 분석 및 검색 (GraphRAG Pipeline)
 사용자가 사고 내용을 입력했을 때, 저장된 법령 중 가장 정확한 조문을 찾아 매칭해주는 실제 서비스 과정입니다. 단독 조문 조회 화면(`/analyze`)뿐 아니라, 심층 검토 요청을 새로 작성하거나(`POST /api/incidents`) 보완 수정할 때(`POST /api/incidents/{id}/edit`)도 동일한 파이프라인이 재사용됩니다.
 - **질의 텍스트 전달**: 사용자가 입력한 긴 사고 진술문을 여러 개의 짧은 문장으로 나눕니다.
-- **하이브리드 검색 (`HybridLawOwlyRetriever`, `app/retrieval.py`)**: 사용자의 문장들을 데이터베이스에 던져 검색합니다. 이때 단순히 **같은 단어(키워드)**가 있는지 찾는 방식과, **문맥의 의미(벡터)**가 비슷한지 찾는 두 가지 방식을 섞어서(하이브리드) 가장 관련성 높은 법 조문 후보들을 1차로 싹쓸이해옵니다.
+- **분야 분류 → 하이브리드 검색 (`HybridLawOwlyRetriever`, `app/retrieval.py`)**: 진술문 전체를 기준으로 1회 LLM 분류(`classify_query_domains`)를 거쳐 관련 분야를 최대 3개 추립니다. 이 분야로 후보를 먼저 좁힌 뒤, 단순히 **같은 단어(키워드)**가 있는지 찾는 방식과 **문맥의 의미(벡터)**가 비슷한지 찾는 두 가지 방식을 섞어서(하이브리드) 가장 관련성 높은 법 조문 후보들을 1차로 싹쓸이해옵니다. 분류가 실패하거나 해당 분야에 후보가 하나도 없으면 필터 없이 전체 검색으로 자동 대체되어(fail-open), 분야 분류가 검색 결과를 절대 비게 만들지 않습니다.
 - **그래프 확장 (`graph_retrieval.py`)**: 위에서 찾은 상위 조문 몇 개를 "시드"로 삼아 Neo4j에서 `REFERENCES`(명시적 인용)나 같은 엔티티를 공유하는 조문을 1~2-hop 이내에서 찾아 후보 목록에 추가합니다. 벡터·키워드 검색이 놓칠 수 있는, 문구는 다르지만 법적으로 연결된 조문을 보강하는 역할입니다. 그래프 확장 결과는 항상 벡터·키워드 검색 결과보다 낮은 우선순위로 덧붙여지며, Neo4j가 응답하지 않아도 예외를 삼키고 기존 결과만으로 정상 동작합니다.
 - **AI 최종 판단 (`ChatGoogleGenerativeAI`)**: 찾아온 후보 법 조문들과 사용자의 사고 진술문을 최신 인공지능인 **Gemini API**에게 넘겨줍니다. *"이 사고 상황에 이 법 조문들이 실제로 적용되는 게 맞는지 확인해줘"*라고 지시(프롬프트)하여, AI가 엄격하게 진짜로 적용되는 조문만 선별하고 인용 근거를 작성합니다.
 - **결과 화면**: 최종적으로 선별된 법 조문과 링크를 사용자가 보기 편하도록 화면의 원문 위치에 색깔별로 하이라이트(형광펜) 칠해서 보여줍니다. 관리자 검토 화면에서는 문구를 드래그해 구간만 재분석하거나 마커를 클릭해 조문을 제거하는 등 결과를 직접 편집할 수도 있습니다.
@@ -159,12 +168,22 @@ flowchart TD
 ```mermaid
 classDiagram
     direction LR
-    
+
+    class law_categories {
+        int id [PK]
+        string code [UK]
+        string name
+    }
+
     class laws {
         int id [PK]
         string law_id [UK]
         string law_name
         string law_type
+        string department
+        int category_id [FK]
+        string mst
+        datetime repealed_at
         date promulgation_date
         date effective_date
         datetime last_synced_at
@@ -191,12 +210,14 @@ classDiagram
         vector embedding
     }
 
+    law_categories "1" --> "*" laws : 분야
     laws "1" *-- "*" articles : 포함
     articles "1" *-- "*" article_chunks : 분할
 ```
 
 **테이블 세부 설명:**
-- `laws` (법령): 산업안전보건법 등 큰 단위의 법률 정보를 저장합니다. (`law_id`: 법령 고유 ID)
+- `law_categories` (분야): 민사·형사·노동·산업안전·부동산건설 등 법령 대분류 16종. 검색을 이 분야로 먼저 좁혀 무관한 분야의 조문이 후보에 섞이지 않게 한다(`app/law_category.py`).
+- `laws` (법령): 산업안전보건법 등 큰 단위의 법률 정보를 저장합니다. (`law_id`: 법령 고유 ID, `mst`: 법령일련번호로 개정 여부 판단, `department`: 소관부처명으로 분야 분류의 보조 근거, `repealed_at`: 현행 목록에서 빠지면 채워지는 폐지 시각)
 - `articles` (조문): 법령에 속한 실제 조문의 원문 전체(`full_text`)와 제목(`title`)을 보관합니다. 
 - `article_chunks` (조문 조각): 긴 조문을 검색하기 좋게 문장 단위로 짧게 쪼개어 놓은 테이블입니다. 원문의 위치(`char_start`, `char_end`)를 기록해두고, AI가 이해할 수 있는 1024차원의 수학적 좌표(`embedding`)를 저장하여 유사도 검색에 활용합니다.
 
@@ -206,10 +227,12 @@ Postgres의 `laws`/`articles`와 동일한 조문을 가리키지만(law_id·art
 
 ```mermaid
 flowchart LR
+    Domain(("Domain<br/>code, name"))
     Law(("Law<br/>law_id, law_name"))
     Article(("Article<br/>law_id, article_no,<br/>article_no_sub, title"))
     Entity(("Entity<br/>name, type"))
 
+    Domain -->|CONTAINS| Law
     Law -->|HAS_ARTICLE| Article
     Article -->|REFERENCES| Article
     Article -->|DEFINES| Entity
@@ -219,6 +242,7 @@ flowchart LR
 ```
 
 **노드/관계 설명:**
+- `Domain` 노드: Postgres `law_categories`를 미러링한 분야 노드입니다. `CONTAINS`로 그 분야의 법령들과 연결되며, 그래프 확장 자체를 분야 경계로 자르지는 않습니다(`REFERENCES`처럼 법령을 넘나드는 인용은 그대로 허용) — 검색 후보를 좁히는 깔때기 역할입니다.
 - `Law` / `Article` 노드: Postgres의 `laws`/`articles`를 그래프로 미러링한 노드입니다. `HAS_ARTICLE`로 법령과 조문을 연결합니다.
 - `Article -[REFERENCES]-> Article`: 조문 원문에 "제38조에 따라"처럼 다른 조를 명시적으로 인용하는 경우 생성됩니다(같은 법령 내 인용을 우선 대상으로 합니다).
 - `Entity` 노드: 조문에 등장하는 의무주체·적용대상·처벌·요구사항 등 핵심 개념을 `name`+`type`으로 저장합니다. 여러 조문이 같은 엔티티를 가리키면 자연스럽게 "이 개념을 공유하는 다른 조문들"이 그래프상에서 연결됩니다.
@@ -255,7 +279,7 @@ classDiagram
         string password_hash
         string display_name
         string role
-        string rank
+        string occupation
         string contact
         string sido_code [FK]
         string sigungu_code [FK]
@@ -273,7 +297,7 @@ classDiagram
         string sigungu_code [FK]
         int category_id [FK]
         string reporter_name
-        string reporter_rank
+        string reporter_occupation
         string reporter_contact
         datetime occurred_at
         text location
@@ -384,8 +408,13 @@ docker compose build api
 # (-d 옵션은 백그라운드 실행을 의미하므로 터미널을 계속 쓸 수 있습니다.)
 docker compose up -d db neo4j
 
-# 4. 법령 데이터 수집 및 임베딩 실행 
+# 4. 법령 데이터 수집 및 임베딩 실행 (최초 1회는 시간이 오래 걸릴 수 있습니다 — 현행 법령 전체 대상)
 # (🔥 여기서 최적화된 GPU 모드가 켜지며 프로그레스 바와 함께 빠르게 진행됩니다!)
+docker compose run --rm api python -m app.ingest --all
+
+# 이후 정기 갱신은 인자 없이 실행하면 됩니다. 법령 목록의 MST(법령일련번호)가 바뀐(=개정된)
+# 법령만 다시 받아오고, 나머지는 API 호출 자체를 건너뛰므로 비용이 작습니다. 현행 목록에서
+# 빠진(폐지된) 법령은 조문을 지워 검색 대상에서 자동으로 제외됩니다.
 docker compose run --rm api python -m app.ingest
 
 # 5. 조문 간 관계/엔티티를 추출해 지식 그래프(Neo4j) 구축
@@ -406,14 +435,14 @@ docker compose up api
 
 http://localhost:8000 접속 시 자동으로 `/login`으로 이동한다. 서버 기동 시(`app/main.py`의 startup 훅) 테이블 생성·마이그레이션(`app/migrate.py`)과 함께 아래 데모 계정이 자동으로 시딩된다(`app/seed.py`, 이미 존재하면 건너뜀). 회원가입 화면에서 직접 계정을 만들어도 된다.
 
-| 아이디 | 비밀번호 | 역할 | 소속 |
+| 아이디 | 비밀번호 | 역할 | 활동 지역 |
 | --- | --- | --- | --- |
-| `user01` | `1111` | 신청자 | 포항사업장 · 품질보증부 |
-| `user02` | `1111` | 신청자 | 포항사업장 · 물류부 |
-| `user03` | `1111` | 신청자 | 광양사업장 · 품질보증부 |
-| `user04` | `1111` | 신청자 | 구미사업장 · 설비보전부 |
-| `manager01` | `1111` | 안전부서 관리자 | 포항사업장 · 안전환경부 |
-| `manager02` | `1111` | 안전부서 관리자 | 세종사업장 · 안전환경부 |
+| `user01` | `1111` | 신청자 | 경상북도 포항시남구 |
+| `user02` | `1111` | 신청자 | 경상북도 구미시 |
+| `user03` | `1111` | 신청자 | 전라남도 광양시 |
+| `user04` | `1111` | 신청자 | 서울특별시 종로구 |
+| `manager01` | `1111` | 검토 담당자 | 서울특별시 종로구 |
+| `manager02` | `1111` | 검토 담당자 | 세종특별자치시 |
 
 로그인 후 신청자 계정은 `/request`에서 심층 검토를 요청하고 `/results`에서 진행 상태를 확인·보완할 수 있으며, 관리자 계정은 `/review`·`/dashboard`에서 전체 사건을 검토·집계할 수 있다.
 
@@ -438,6 +467,8 @@ pytest
 - 조문 청킹/질의 텍스트 청킹은 모두 `app/chunking.py`의 문장 단위 슬라이딩 윈도우를 공유한다.
 - 하이브리드 검색은 `app/retrieval.py`에서 벡터 유사도와 트라이그램 유사도를 RRF로 결합하고, 그 결과를 시드로 `app/graph_retrieval.py`가 Neo4j 그래프 확장을 추가한다. 그래프 확장은 항상 벡터/키워드 결과보다 낮은 우선순위이며, Neo4j 장애 시에도 예외를 삼키고 기존 결과만으로 정상 동작한다.
 - 그래프 구축(`app/graph_extract.py`, `app/graph_ingest.py`)은 벡터 임베딩 파이프라인(`app/ingest.py`)과 완전히 분리된 별도 명령이다. 조문 원문에서 참조 관계와 엔티티를 Gemini로 추출해 Neo4j에 `MERGE`하며, 여러 번 재실행해도 안전하다.
+- 법령 분야(`app/law_category.py`)는 API 호출 없는 규칙 기반 분류라 무료·즉시 처리되며, 규칙이 바뀌면 다음 기동 시(`app/seed.py`) 기존 법령도 자동 재분류된다. 검색 시 질의 문서 전체를 1회만 LLM으로 분류해(청크마다 재호출하지 않음) 분야를 좁히고, 분류 실패·후보 없음이면 항상 전체 검색으로 폴백한다(fail-open) — Neo4j 그래프 확장 실패 시 폴백하는 것과 같은 원칙이다.
+- `python -m app.ingest`(인자 없음)는 법령 목록의 MST(법령일련번호) 비교로 개정분만 골라 처리하는 증분 동기화다. 전체를 무조건 다시 받고 싶으면 `--all`을 쓴다. 현행 목록에서 빠진 법령은 조문만 지우고 `laws` 행은 이력으로 남긴다(`repealed_at`).
 - 인증은 JWT 등 외부 라이브러리 없이 `app/auth.py`의 PBKDF2 해싱 + DB 세션 테이블만으로 구현되어 있다.
 - 사건 상태 전이는 `app/routers/incidents.py`의 `add_comment()`(코멘트 종류에 따른 자동 전이)와 `update_incident_status()`(관리자 수동 전이) 두 경로에서만 일어나며, 두 경로 모두 반드시 `incident_events`에 이력을 남긴다.
 - 신고 원문(`incidents.statement`)은 조문 인용의 문자 오프셋(`citations[].start/end`) 기준이 되므로, 수정(`/api/incidents/{id}/edit`) 시에도 항목을 다시 조합해 `statement`를 새로 만들고 재분석하는 방식으로만 갱신한다.

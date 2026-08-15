@@ -29,6 +29,7 @@ def graph_session():
 # MERGE는 매칭할 인덱스가 없으면 라벨 전체를 훑는다. 조문이 수만 개로 늘면 적재가
 # 급격히 느려지므로 유일성 제약(= 인덱스)을 미리 만들어 둔다.
 _CONSTRAINTS = [
+    "CREATE CONSTRAINT domain_code_unique IF NOT EXISTS FOR (d:Domain) REQUIRE d.code IS UNIQUE",
     "CREATE CONSTRAINT law_id_unique IF NOT EXISTS FOR (l:Law) REQUIRE l.law_id IS UNIQUE",
     "CREATE CONSTRAINT article_key_unique IF NOT EXISTS FOR (a:Article) "
     "REQUIRE (a.law_id, a.article_no, a.article_no_sub) IS UNIQUE",

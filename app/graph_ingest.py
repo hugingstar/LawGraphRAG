@@ -29,14 +29,28 @@ from app.graph_extract import (
     build_graph_chain,
     extract_article_graph,
 )
+from app.law_category import LAW_CATEGORIES
 from app.models import Article, Law
 
 
+_CATEGORY_NAME_BY_CODE = dict(LAW_CATEGORIES)
+
+
 def _merge_article_node(law: Law, article: Article) -> None:
+    category_code = law.category.code if law.category else "etc"
+    category_name = _CATEGORY_NAME_BY_CODE.get(category_code, "기타")
+
     with graph_session() as gs:
         gs.run(
-            "MERGE (l:Law {law_id: $law_id}) SET l.law_name = $law_name",
-            law_id=law.law_id, law_name=law.law_name,
+            """
+            MERGE (d:Domain {code: $category_code}) SET d.name = $category_name
+            MERGE (l:Law {law_id: $law_id}) SET l.law_name = $law_name
+            MERGE (d)-[:CONTAINS]->(l)
+            """,
+            category_code=category_code,
+            category_name=category_name,
+            law_id=law.law_id,
+            law_name=law.law_name,
         )
         gs.run(
             """

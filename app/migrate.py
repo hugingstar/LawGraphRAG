@@ -86,6 +86,18 @@ _STATEMENTS = [
     # --- 대량 법령 수집을 위한 이어달리기 표시 ---
     "ALTER TABLE articles ADD COLUMN IF NOT EXISTS content_hash TEXT",
     "ALTER TABLE articles ADD COLUMN IF NOT EXISTS graph_synced_at TIMESTAMPTZ",
+    # --- 법령 분야(Domain) 계층 ---
+    """CREATE TABLE IF NOT EXISTS law_categories (
+        id    BIGSERIAL PRIMARY KEY,
+        code  TEXT NOT NULL UNIQUE,
+        name  TEXT NOT NULL
+    )""",
+    "ALTER TABLE laws ADD COLUMN IF NOT EXISTS department TEXT",
+    "ALTER TABLE laws ADD COLUMN IF NOT EXISTS category_id BIGINT REFERENCES law_categories(id)",
+    "CREATE INDEX IF NOT EXISTS idx_laws_category_id ON laws(category_id)",
+    # --- 증분 동기화(개정/폐지분만 처리)를 위한 컬럼 ---
+    "ALTER TABLE laws ADD COLUMN IF NOT EXISTS mst TEXT",
+    "ALTER TABLE laws ADD COLUMN IF NOT EXISTS repealed_at TIMESTAMPTZ",
     """DO $$
     DECLARE col TEXT;
     BEGIN
