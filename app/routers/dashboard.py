@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
-from app.auth import require_manager
+from app.auth import require_login
 from app.db import get_session
 from app.law_catalog import available_law_names
 from app.models import INCIDENT_STATUS_LABELS, Incident, IncidentCategory, Region, User
@@ -17,7 +17,7 @@ router = APIRouter()
 @router.get("/dashboard", response_class=HTMLResponse)
 def dashboard_page(
     request: Request,
-    user: User = Depends(require_manager),
+    user: User = Depends(require_login),
     session: Session = Depends(get_session),
 ):
     today = datetime.date.today()
@@ -78,7 +78,7 @@ def _top_category_per_region(session: Session, scoped, region_column) -> dict[st
 def dashboard_stats(
     start: str | None = None,
     end: str | None = None,
-    user: User = Depends(require_manager),
+    user: User = Depends(require_login),
     session: Session = Depends(get_session),
 ):
     start_dt, end_dt = _date_bounds(start, end)
