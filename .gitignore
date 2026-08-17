@@ -2,7 +2,6 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .env
-.env.example
 .env.ops
 
 # Dockerfile.ops 가 빌드 시 내려받는 3d-force-graph 번들
