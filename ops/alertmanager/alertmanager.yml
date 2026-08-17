@@ -1,0 +1,69 @@
+# Alertmanager 라우팅.
+#
+# rules.yml 의 알림에는 이미 severity 라벨(critical / warning / info)이 붙어
+# 있다. 여기서 그 라벨로 갈라서, critical 은 즉시·재촉(repeat_interval 짧게)
+# 하고 warning/info 는 느슨하게 묶어 보낸다.
+#
+# SLACK_WEBHOOK_URL 은 .env.ops 에서 온다(비밀값이라 파일에 직접 안 쓴다).
+# docker-compose.ops.yml 이 컨테이너 시작 시 이 파일의 자리표시자를 실제 값으로
+# 치환해서 올린다(Alertmanager 자체는 환경변수 치환을 지원하지 않는다).
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default
+  group_by: ["alertname", "component"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers: ["severity = critical"]
+      receiver: slack-critical
+      group_wait: 10s
+      repeat_interval: 1h
+    - matchers: ["severity = warning"]
+      receiver: slack-warning
+      repeat_interval: 6h
+    - matchers: ["severity = info"]
+      receiver: slack-warning
+      repeat_interval: 24h
+
+# 원인 하나가 파생 경보를 여러 개 울리는 걸 막는다.
+# 예: Postgres 자체가 죽으면(ComponentDown) 그 위의 PostgresConnectionsHigh 같은
+# 파생 경보까지 동시에 오지 않게 한다.
+inhibit_rules:
+  - source_matchers: ["alertname = ComponentDown", "component = postgres"]
+    target_matchers: ["alertname =~ Postgres.*|LongRunningQueries"]
+    equal: []
+  - source_matchers: ["alertname = ComponentDown", "component = neo4j"]
+    target_matchers: ["alertname = GraphStoppedGrowing"]
+    equal: []
+  - source_matchers: ["alertname = ComponentDown", "component = web"]
+    target_matchers: ["alertname = WebSlow"]
+    equal: []
+
+receivers:
+  - name: default
+
+  - name: slack-critical
+    slack_configs:
+      - api_url: "__SLACK_WEBHOOK_URL__"
+        channel: "#lawgraphrag-alerts"
+        send_resolved: true
+        title: "🔴 [긴급] {{ .CommonLabels.alertname }}"
+        text: >-
+          {{ range .Alerts }}*{{ .Labels.component }}{{ if .Labels.name }} ({{ .Labels.name }}){{ end }}*
+          — {{ .Annotations.summary }}
+          {{ end }}
+
+  - name: slack-warning
+    slack_configs:
+      - api_url: "__SLACK_WEBHOOK_URL__"
+        channel: "#lawgraphrag-alerts"
+        send_resolved: true
+        title: "🟡 {{ .CommonLabels.alertname }}"
+        text: >-
+          {{ range .Alerts }}*{{ .Labels.component }}{{ if .Labels.name }} ({{ .Labels.name }}){{ end }}*
+          — {{ .Annotations.summary }}
+          {{ end }}

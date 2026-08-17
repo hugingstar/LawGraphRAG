@@ -8,9 +8,14 @@ LLM으로 추출한 뒤 Neo4j에 적재한다. 기존 벡터 임베딩 파이프
 그래서 처리한 조문에 `graph_synced_at`을 찍어두고 다음 실행에서 건너뛴다. 쿼터가 떨어져
 중간에 멈춰도 다시 실행하면 남은 조문부터 이어서 진행한다.
 
+**어디까지 적재할지**: 조문이 20만 개가 넘어 전체 적재는 무료 티어로 수백 일이 걸린다.
+검색은 사용자가 설정에서 켠 법만 대상으로 하고(app.retrieval), 그래프 확장 결과도 켜 둔 법으로
+다시 걸러지므로, 실제로 쓰는 법령만 --law로 골라 적재하면 충분하다.
+
 사용법:
-    python -m app.graph_ingest              # 남은 조문 전체
-    python -m app.graph_ingest --limit 400  # 오늘 쿼터만큼만
+    python -m app.graph_ingest --law "산업안전보건법"   # 이 법령만(권장)
+    python -m app.graph_ingest --limit 400             # 오늘 쿼터만큼만
+    python -m app.graph_ingest                         # 남은 조문 전체(수백 일 소요)
 """
 
 import argparse
@@ -123,7 +128,9 @@ def _merge_graph_data(
             )
 
 
-def graph_ingest_all(session: Session, limit: int | None = None) -> None:
+def graph_ingest_all(
+    session: Session, limit: int | None = None, law_names: list[str] | None = None
+) -> None:
     laws = session.scalars(select(Law)).all()
     if not laws:
         print(
@@ -137,9 +144,18 @@ def graph_ingest_all(session: Session, limit: int | None = None) -> None:
     # 법령명 -> law_id. 조문이 타 법령을 인용할 때 올바른 노드로 잇기 위해 쓴다.
     law_id_by_name = {law.law_name: law.law_id for law in laws}
 
-    pending = session.scalars(
-        select(Article).where(Article.graph_synced_at.is_(None)).order_by(Article.id)
-    ).all()
+    stmt = select(Article).where(Article.graph_synced_at.is_(None))
+    if law_names:
+        target_laws = [law for law in laws if law.law_name in set(law_names)]
+        unknown = set(law_names) - {law.law_name for law in target_laws}
+        if unknown:
+            print(f"[graph_ingest][경고] 이런 법령을 찾지 못했습니다: {', '.join(sorted(unknown))}", file=sys.stderr)
+        if not target_laws:
+            return
+        print(f"[graph_ingest] 대상 법령 {len(target_laws)}건: {', '.join(law.law_name for law in target_laws)}")
+        stmt = stmt.where(Article.law_id.in_([law.id for law in target_laws]))
+
+    pending = session.scalars(stmt.order_by(Article.id)).all()
     if limit:
         pending = pending[:limit]
 
@@ -149,6 +165,16 @@ def graph_ingest_all(session: Session, limit: int | None = None) -> None:
 
     total_articles = session.scalar(select(func.count()).select_from(Article)) or 0
     print(f"[graph_ingest] 미처리 조문 {len(pending)}개 처리 시작 (전체 {total_articles}개)")
+
+    # 조문 하나당 Gemini 1회를 부르므로 전체 적재는 무료 티어(일 500회) 기준 몇백 일이
+    # 걸린다. 검색은 사용자가 켠 법만 대상으로 하니 --law로 좁혀 쓰는 편이 현실적이다.
+    if not law_names and len(pending) > 5000:
+        print(
+            f"[graph_ingest][주의] 조문 {len(pending)}개는 무료 티어(일 500회) 기준 약 "
+            f"{len(pending) // 500}일이 걸립니다. 실제로 검색에 쓰는 법령만 적재하려면 "
+            "--law '산업안전보건법' 처럼 좁혀서 실행하세요.",
+            file=sys.stderr,
+        )
 
     chain = build_graph_chain()
     law_by_id = {law.id: law for law in laws}
@@ -186,11 +212,18 @@ def graph_ingest_all(session: Session, limit: int | None = None) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="조문 그래프 구축")
     parser.add_argument("--limit", type=int, default=None, help="이번 실행에서 처리할 최대 조문 수")
+    parser.add_argument(
+        "--law",
+        action="append",
+        dest="law_names",
+        metavar="법령명",
+        help="이 법령의 조문만 처리한다(여러 번 지정 가능). 생략하면 전체 법령이 대상이다.",
+    )
     args = parser.parse_args()
 
     session = SessionLocal()
     try:
-        graph_ingest_all(session, limit=args.limit)
+        graph_ingest_all(session, limit=args.limit, law_names=args.law_names)
     finally:
         session.close()
 

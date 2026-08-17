@@ -1,25 +1,36 @@
-"""하이브리드 검색: pgvector 코사인 유사도 + pg_trgm 키워드 유사도 + Neo4j 그래프 확장.
+"""검색: pgvector 코사인 유사도(HNSW) → cross-encoder 재순위 → Neo4j 그래프 확장.
 
-벡터와 trigram 결과를 Reciprocal Rank Fusion(RRF)으로 합쳐 순위를 매긴 뒤(RRF는 점수 스케일이
-다른 두 검색 방식을 정규화 없이 안정적으로 합칠 수 있어 하이브리드 검색에서 널리 쓰인다),
-상위 조문을 시드로 그래프 확장(graph_expand)을 추가로 수행해 명시적으로 인용되거나 같은
-개념(의무주체/처벌 등)을 공유하는 조문을 보강한다. 그래프 확장은 항상 벡터+trigram 결과보다
-낮은 우선순위로 덧붙여지며, Neo4j가 죽어 있어도 기존 결과는 그대로 반환된다.
+벡터 검색으로 후보를 넓게 뽑고(조문 단위로 추린 뒤 상위 RERANK_POOL개), cross-encoder가
+질의와 조문을 같이 읽어 다시 줄 세운 다음, 상위 조문을 시드로 그래프 확장(graph_expand)을
+수행해 명시적으로 인용되거나 같은 개념(의무주체/처벌 등)을 공유하는 조문을 보강한다.
+그래프 확장은 항상 벡터·재순위 결과보다 낮은 우선순위로 덧붙여지며, Neo4j가 죽어 있거나
+재순위 모델을 못 써도 벡터 결과는 그대로 나간다.
+
+키워드(pg_trgm) 검색은 뺐다: `ORDER BY similarity(...) LIMIT n`은 GIN 인덱스로 풀 수 없어
+활성화된 법의 청크를 매번 풀스캔했고(229만 청크 기준 청크당 2.5~6.3초), 법령을 수천 건 켜면
+이 한 갈래가 분석 시간을 통째로 지배했다. 같은 조건에서 벡터 단독은 0.5초 수준이다.
 """
 
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import select, text as sqltext
 from sqlalchemy.orm import Session
 
 from app.embeddings import embed_queries
 from app.graph_retrieval import graph_expand
 from app.law_catalog import selected_law_ids
-from app.models import Article, ArticleChunk, Law, LawCategory, UserLawSelection
+from app.rerank import RERANK_POOL, rerank_order
+from app.models import Article, ArticleChunk, Law, UserLawSelection
 
-RRF_K = 60
-GRAPH_SEED_COUNT = 3
-GRAPH_EXTRA_LIMIT = 4
+# 그래프 확장은 이제 벡터와 함께 두 갈래 중 하나이므로 시드와 확장 폭을 조금 넓게 잡는다.
+GRAPH_SEED_COUNT = 5
+GRAPH_EXTRA_LIMIT = 8
+
+# 벡터가 물어오는 후보 청크 수. 조문 하나가 여러 청크로 쪼개져 있어서 후보 30개는 서로 다른
+# 조문 12개 남짓밖에 안 된다 — 법령이 수천 건 켜져 있으면 정작 맞는 조문이 그 안에 못 들어와
+# "적용되는 조문 없음"이 되어버린다. 개수를 늘려도 지연이 거의 그대로라(측정: 30개·150개·300개
+# 모두 0.53~0.64초) 넉넉히 잡는다. 150개 = 서로 다른 조문 56개.
+DEFAULT_CANDIDATE_POOL = 150
 
 
 @dataclass
@@ -30,38 +41,31 @@ class RetrievedArticle:
     score: float
 
 
-def _apply_domain_filter(stmt, domain_codes: list[str] | None, user_id: int):
-    # 이 사용자가 설정 > 법 활성화에서 켜 둔 법으로만 후보를 좁힌다 — 법령 수가 늘어날수록
-    # 이 필터가 벡터/trigram 후보 스캔 범위를 줄여 조회 성능을 좌우한다.
+def _vector_candidates(
+    session: Session, query_vector: list[float], limit: int, user_id: int
+) -> list[int]:
+    """이 사용자가 설정 > 법 활성화에서 켜 둔 법의 청크 중 질의와 가장 가까운 것들.
+
+    분야(LawCategory) 필터는 걸지 않는다. 분야 조인을 붙이면 플래너가 HNSW 인덱스를
+    포기하고 해당 분야 청크를 전부 훑어(측정: 178,636행 정렬 900ms) 인덱스 스캔(41ms)보다
+    22배 느려지는 데다, 규칙 분류가 'etc'로 남긴 법령 3,387건(전체의 60%)이 후보에서
+    통째로 빠진다. 결과가 0건일 때만 걸리는 기존 폴백은 '결과가 나쁜' 경우를 못 살렸다."""
+    # HNSW 스캔은 ef_search개(기본 40)를 훑고 끝내므로, 활성화 법 필터에 걸러지고 나면
+    # LIMIT을 못 채운다 — 실측으로 limit=150을 걸어도 10행만 돌아왔다. iterative_scan을
+    # 켜면 LIMIT이 찰 때까지 인덱스를 이어서 훑는다(pgvector 0.8+). relaxed_order는
+    # 순서가 아주 조금 흐트러질 수 있지만, 어차피 조문 단위로 다시 추리고 LLM이 판단한다.
+    session.execute(sqltext("SET LOCAL hnsw.iterative_scan = relaxed_order"))
+    session.execute(sqltext("SET LOCAL hnsw.ef_search = 100"))
     stmt = (
-        stmt.join(Article, ArticleChunk.article_id == Article.id)
+        select(ArticleChunk.id)
+        .join(Article, ArticleChunk.article_id == Article.id)
         .join(Law, Article.law_id == Law.id)
         .join(UserLawSelection, UserLawSelection.law_id == Law.id)
         .where(UserLawSelection.user_id == user_id)
+        .order_by(ArticleChunk.embedding.cosine_distance(query_vector))
+        .limit(limit)
     )
-    if not domain_codes:
-        return stmt
-    return stmt.join(LawCategory, Law.category_id == LawCategory.id).where(LawCategory.code.in_(domain_codes))
-
-
-def _vector_candidates(
-    session: Session, query_vector: list[float], limit: int, user_id: int, domain_codes: list[str] | None = None
-) -> list[int]:
-    stmt = select(ArticleChunk.id)
-    stmt = _apply_domain_filter(stmt, domain_codes, user_id)
-    stmt = stmt.order_by(ArticleChunk.embedding.cosine_distance(query_vector)).limit(limit)
-    rows = session.execute(stmt).all()
-    return [r[0] for r in rows]
-
-
-def _trigram_candidates(
-    session: Session, query_text: str, limit: int, user_id: int, domain_codes: list[str] | None = None
-) -> list[int]:
-    stmt = select(ArticleChunk.id)
-    stmt = _apply_domain_filter(stmt, domain_codes, user_id)
-    stmt = stmt.order_by(func.similarity(ArticleChunk.chunk_text, query_text).desc()).limit(limit)
-    rows = session.execute(stmt).all()
-    return [r[0] for r in rows]
+    return [r[0] for r in session.execute(stmt).all()]
 
 
 def hybrid_search(
@@ -69,50 +73,51 @@ def hybrid_search(
     query_text: str,
     user_id: int,
     top_k: int = 8,
-    candidate_pool: int = 30,
-    domain_codes: list[str] | None = None,
+    candidate_pool: int = DEFAULT_CANDIDATE_POOL,
 ) -> list[RetrievedArticle]:
     query_vector = embed_queries([query_text])[0]
 
-    vector_ids = _vector_candidates(session, query_vector, candidate_pool, user_id, domain_codes)
-    trigram_ids = _trigram_candidates(session, query_text, candidate_pool, user_id, domain_codes)
+    vector_ids = _vector_candidates(session, query_vector, candidate_pool, user_id)
 
-    rrf_scores: dict[int, float] = {}
-    for rank, chunk_id in enumerate(vector_ids):
-        rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0.0) + 1.0 / (RRF_K + rank + 1)
-    for rank, chunk_id in enumerate(trigram_ids):
-        rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0.0) + 1.0 / (RRF_K + rank + 1)
+    # 순위가 앞설수록 높은 점수. 그래프 확장 결과가 이 점수 아래에 붙는다.
+    scores = {chunk_id: 1.0 / (rank + 1) for rank, chunk_id in enumerate(vector_ids)}
 
-    # 분야 필터로 후보가 하나도 안 걸리면(분류가 애매하거나 틀렸을 가능성) 필터 없이
-    # 전체 검색으로 폴백한다 — graph_expand와 동일하게, 이 필터도 검색 결과를 절대
-    # 비게 만들어서는 안 된다. (활성화한 법 자체가 없는 경우는 폴백하지 않는다 — 사용자가
-    # 아직 검색 대상 법을 하나도 고르지 않았다는 뜻이므로 결과가 없는 게 맞다.)
-    if not rrf_scores and domain_codes:
-        return hybrid_search(session, query_text, user_id, top_k, candidate_pool, domain_codes=None)
-
-    if not rrf_scores:
+    # 켜 둔 법이 하나도 없으면 여기서 빈손이 되는 게 맞다 — 사용자가 아직 검색 대상 법을
+    # 고르지 않았다는 뜻이다.
+    if not scores:
         return []
 
-    chunk_ids = list(rrf_scores.keys())
     chunks = session.execute(
-        select(ArticleChunk).where(ArticleChunk.id.in_(chunk_ids))
+        select(ArticleChunk).where(ArticleChunk.id.in_(list(scores.keys())))
     ).scalars().all()
 
     # 조문(article) 단위로 최고 점수 청크만 남긴다.
     best_by_article: dict[int, tuple[ArticleChunk, float]] = {}
     for chunk in chunks:
-        score = rrf_scores[chunk.id]
+        score = scores[chunk.id]
         current = best_by_article.get(chunk.article_id)
         if current is None or score > current[1]:
             best_by_article[chunk.article_id] = (chunk, score)
 
-    ranked = sorted(best_by_article.values(), key=lambda pair: pair[1], reverse=True)[:top_k]
+    # 벡터 순서로 넉넉히 남긴 뒤 cross-encoder가 다시 줄 세운다(실패하면 벡터 순서 유지).
+    ranked = sorted(best_by_article.values(), key=lambda pair: pair[1], reverse=True)[:RERANK_POOL]
+    order = rerank_order(query_text, [chunk.chunk_text for chunk, _ in ranked])
+    if order is not None:
+        ranked = [ranked[i] for i in order]
+    ranked = ranked[:top_k]
 
     results = []
-    for chunk, score in ranked:
+    # 재순위 뒤에는 벡터 점수가 순서와 안 맞으므로, 최종 순위를 그대로 점수로 쓴다
+    # (_graph_expanded_results가 이 점수 아래에 그래프 결과를 붙인다).
+    for rank, (chunk, _) in enumerate(ranked):
         article = chunk.article
         results.append(
-            RetrievedArticle(article=article, law=article.law, chunk_text=chunk.chunk_text, score=score)
+            RetrievedArticle(
+                article=article,
+                law=article.law,
+                chunk_text=chunk.chunk_text,
+                score=1.0 / (rank + 1),
+            )
         )
 
     results.extend(_graph_expanded_results(session, results, user_id))
@@ -122,7 +127,7 @@ def hybrid_search(
 def _graph_expanded_results(
     session: Session, seed_results: list[RetrievedArticle], user_id: int
 ) -> list[RetrievedArticle]:
-    """기존 벡터+trigram 결과보다 항상 낮은 점수로, 그래프상 관련 조문을 덧붙인다.
+    """벡터 결과보다 항상 낮은 점수로, 그래프상 관련 조문을 덧붙인다.
 
     그래프 확장은 Neo4j 전체를 대상으로 도니, 이 사용자가 설정 > 법 활성화에서 켜지 않은
     법의 조문까지 딸려 올 수 있다. 그런 조문은 애초에 검색 대상이 아니어야 하므로 여기서
@@ -165,8 +170,7 @@ class HybridLawOwlyRetriever(BaseRetriever):
     session: Any = Field(exclude=True)
     user_id: int
     top_k: int = 8
-    candidate_pool: int = 30
-    domain_codes: list[str] | None = None
+    candidate_pool: int = DEFAULT_CANDIDATE_POOL
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -174,7 +178,7 @@ class HybridLawOwlyRetriever(BaseRetriever):
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> list[Document]:
         results = hybrid_search(
-            self.session, query, self.user_id, self.top_k, self.candidate_pool, self.domain_codes
+            self.session, query, self.user_id, self.top_k, self.candidate_pool
         )
         docs = []
         for r in results:
@@ -187,6 +191,9 @@ class HybridLawOwlyRetriever(BaseRetriever):
                     "title": r.article.title,
                     "score": r.score,
                     "article_label": r.article.article_label,
+                    # 쟁점 단위가 아닌 청크 단위 인용에 분야 배지를 붙이는 근거
+                    # (app.annotate._citations_from_result). 검색을 좁히는 데는 쓰지 않는다.
+                    "category_code": r.law.category.code if r.law.category else None,
                 }
             )
             docs.append(doc)

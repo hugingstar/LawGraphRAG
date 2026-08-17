@@ -1,5 +1,4 @@
 {% extends "_layout.html" %}
-{% import "_macros.html" as macros %}
 {% block content %}
       <div class="hero">
         <h1>법부엉이</h1>
@@ -31,16 +30,17 @@
               <div id="highlighted-text"></div>
             </div>
 
+            <div class="result-block" id="issue-panel" hidden>
+              <h2>검토 쟁점</h2>
+              <div id="issue-panel-body"></div>
+            </div>
+
             <div class="result-block">
               <h2>인용 조문</h2>
               <ul id="citation-list"></ul>
             </div>
           </section>
         </section>
-
-        <aside class="lookup-laws">
-          {{ macros.law_list_card(available_laws) }}
-        </aside>
       </div>
 
       <div class="write-example">

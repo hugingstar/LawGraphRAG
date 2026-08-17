@@ -1,0 +1,193 @@
+{
+  "uid": "lawgraphrag-activity",
+  "title": "LawGraphRAG 서비스 활동",
+  "tags": ["lawgraphrag", "activity"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "editable": true,
+  "panels": [
+    {
+      "type": "row",
+      "title": "신청 접수",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "신청 건수",
+      "description": "incidents 테이블 기준. 사용자가 /request 페이지에서 넣은 사고 신청이다.",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        { "refId": "A", "expr": "lawgraphrag_incidents_1h", "legendFormat": "1시간", "instant": true },
+        { "refId": "B", "expr": "lawgraphrag_incidents_24h", "legendFormat": "24시간", "instant": true },
+        { "refId": "C", "expr": "lawgraphrag_incidents_total", "legendFormat": "누적", "instant": true }
+      ],
+      "options": {
+        "colorMode": "value", "graphMode": "area", "textMode": "value_and_name",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "super-light-blue" } }, "overrides": [] }
+    },
+    {
+      "type": "piechart",
+      "title": "상태별 신청 분포",
+      "description": "한 상태에 쌓여 있으면 처리 적체다.",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        { "refId": "A", "expr": "lawgraphrag_incidents_by_status", "legendFormat": "{{status}}", "instant": true }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "right", "showLegend": true },
+        "pieType": "donut",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "신청 누적 추이",
+      "description": "선이 평평하면 신규 접수가 없다는 뜻이다.",
+      "gridPos": { "h": 5, "w": 12, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        { "refId": "A", "expr": "lawgraphrag_incidents_total", "legendFormat": "누적 신청" },
+        { "refId": "B", "expr": "lawgraphrag_events_24h", "legendFormat": "24시간 처리 이벤트" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10, "lineWidth": 2, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "row",
+      "title": "사용자",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "사용자 / 세션",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        { "refId": "A", "expr": "lawgraphrag_users_total", "legendFormat": "전체 사용자", "instant": true },
+        { "refId": "B", "expr": "lawgraphrag_sessions_active", "legendFormat": "유효 세션", "instant": true },
+        { "refId": "C", "expr": "lawgraphrag_users_active_24h", "legendFormat": "24시간 로그인", "instant": true }
+      ],
+      "options": {
+        "colorMode": "value", "graphMode": "area", "textMode": "value_and_name",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "green" } }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "활성 세션 추이",
+      "gridPos": { "h": 5, "w": 9, "x": 6, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        { "refId": "A", "expr": "lawgraphrag_sessions_active", "legendFormat": "유효 세션" },
+        { "refId": "B", "expr": "lawgraphrag_users_active_24h", "legendFormat": "24시간 로그인 사용자" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 12, "lineWidth": 1, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "처리 활동 (이벤트·코멘트)",
+      "gridPos": { "h": 5, "w": 9, "x": 15, "y": 7 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        { "refId": "A", "expr": "lawgraphrag_events_1h", "legendFormat": "1시간 처리 이벤트" },
+        { "refId": "B", "expr": "lawgraphrag_comments_24h", "legendFormat": "24시간 코멘트" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 12, "lineWidth": 1, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "row",
+      "title": "요청 트래픽 (페이지별)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 12 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "경로별 요청률 (req/s)",
+      "description": "uvicorn 액세스 로그 기반. 어떤 화면이 실제로 쓰이는지 보여준다.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, sum by (method, path) (rate(lawgraphrag_http_requests_total[5m])))",
+          "legendFormat": "{{method}} {{path}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 15, "lineWidth": 1, "showPoints": "never", "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "bottom", "showLegend": true, "calcs": ["sum"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "상태코드별 응답률",
+      "description": "4xx/5xx 가 튀면 특정 화면이 깨진 것이다.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (rate(lawgraphrag_http_requests_total[5m]))",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 20, "lineWidth": 1, "showPoints": "never", "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "bargauge",
+      "title": "가장 많이 호출된 경로 (누적)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 21 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(12, sum by (method, path) (lawgraphrag_http_requests_total))",
+          "legendFormat": "{{method}} {{path}}",
+          "instant": true
+        }
+      ],
+      "options": {
+        "displayMode": "gradient", "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "continuous-GrYlRd" } }, "overrides": [] }
+    },
+    {
+      "type": "table",
+      "title": "오류 응답 상세 (4xx / 5xx)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 21 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (method, path, status) (lawgraphrag_http_requests_total{status=~\"4..|5..\"})",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "instance": true, "job": true }, "renameByName": { "method": "메서드", "path": "경로", "status": "상태", "Value": "건수" } } },
+        { "id": "sortBy", "options": { "fields": {}, "sort": [{ "field": "건수", "desc": true }] } }
+      ],
+      "options": { "showHeader": true, "footer": { "show": false } },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "align": "auto" } }, "overrides": [] }
+    }
+  ]
+}

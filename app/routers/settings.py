@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
@@ -5,10 +7,12 @@ from sqlalchemy.orm import Session
 from app.auth import SESSION_COOKIE, require_login, verify_password, hash_password
 from app.db import get_session
 from app.law_catalog import (
-    FREE_TIER_LAW_LIMIT,
+    available_law_names,
     grouped_toggleable_laws,
+    inject_available_laws,
     selected_law_ids,
     set_enabled_laws,
+    toggleable_law_ids,
 )
 from app.models import (
     OCCUPATIONS,
@@ -24,6 +28,7 @@ from app.routers.regions import sido_list, sigungu_list
 from app.templating import templates
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -31,6 +36,7 @@ def settings_page(
     request: Request,
     user: User = Depends(require_login),
     session: Session = Depends(get_session),
+    _laws: None = Depends(inject_available_laws),
 ):
     profile = session.get(User, user.id)
     return templates.TemplateResponse(
@@ -62,6 +68,7 @@ def update_settings(
     new_password_confirm: str = Form(""),
     user: User = Depends(require_login),
     session: Session = Depends(get_session),
+    _laws: None = Depends(inject_available_laws),
 ):
     profile = session.get(User, user.id)
     sidos = sido_list(session)
@@ -126,24 +133,34 @@ def update_settings(
     return render("변경사항이 저장되었습니다.", False)
 
 
+def law_form_context(session: Session, user_id: int) -> dict:
+    """법 활성화 폼(_settings_laws_form.html)이 필요로 하는 값. 페이지와 팝업이 같은 폼을
+    쓰므로 한 곳에서 만든다. law_total은 "N / 전체개수개 선택됨" 표시에 쓴다 — 활성화
+    개수 자체에는 제한이 없다(전체 선택 가능)."""
+    law_groups = grouped_toggleable_laws(session)
+    checked_ids = selected_law_ids(session, user_id)
+    return {
+        "law_groups": law_groups,
+        "law_total": sum(len(laws) for _, laws in law_groups),
+        "checked_ids": checked_ids,
+        "enabled_count": len(checked_ids),
+    }
+
+
 @router.get("/settings/laws", response_class=HTMLResponse)
 def settings_laws_page(
     request: Request,
     user: User = Depends(require_login),
     session: Session = Depends(get_session),
+    _laws: None = Depends(inject_available_laws),
 ):
-    law_groups = grouped_toggleable_laws(session)
-    checked_ids = selected_law_ids(session, user.id)
     return templates.TemplateResponse(
         "settings_laws.html",
         {
             "request": request,
             "active": "settings",
             "wide": True,
-            "law_groups": law_groups,
-            "law_limit": FREE_TIER_LAW_LIMIT,
-            "checked_ids": checked_ids,
-            "enabled_count": len(checked_ids),
+            **law_form_context(session, user.id),
         },
     )
 
@@ -152,45 +169,20 @@ def settings_laws_page(
 def update_settings_laws(
     request: Request,
     law_ids: list[int] = Form(default=[]),
-    known_law_ids: list[int] = Form(default=[]),
     user: User = Depends(require_login),
     session: Session = Depends(get_session),
 ):
-    # 클라이언트에서 체크박스를 5개 초과로 못 누르게 막아 두지만, 폼은 누구든 조작해서
-    # 보낼 수 있으므로 서버에서도 반드시 다시 검증한다.
-    if len(law_ids) > FREE_TIER_LAW_LIMIT:
-        law_groups = grouped_toggleable_laws(session)
-        checked_ids = set(law_ids)
-        return templates.TemplateResponse(
-            "settings_laws.html",
-            {
-                "request": request,
-                "active": "settings",
-                "wide": True,
-                "law_groups": law_groups,
-                "law_limit": FREE_TIER_LAW_LIMIT,
-                # 저장은 실패했지만, 사용자가 방금 고르던 선택 그대로 보여줘서 몇 개만 해제하고
-                # 바로 다시 제출할 수 있게 한다(저장된 이전 상태로 되돌리면 다시 처음부터 골라야 함).
-                "checked_ids": checked_ids,
-                "enabled_count": len(checked_ids),
-                "error": f"무료 티어는 최대 {FREE_TIER_LAW_LIMIT}개까지만 활성화할 수 있습니다.",
-            },
-            status_code=400,
-        )
-
-    set_enabled_laws(session, user.id, set(known_law_ids), set(law_ids))
-    law_groups = grouped_toggleable_laws(session)
-    checked_ids = selected_law_ids(session, user.id)
+    set_enabled_laws(session, user.id, toggleable_law_ids(session), set(law_ids))
+    # inject_available_laws Depends는 요청 본문 처리 전에 도니 방금 저장한 선택이
+    # 반영 안 된 값을 캐싱한다 — 저장 뒤 직접 다시 조회해서 상단 바에 최신 목록이 뜨게 한다.
+    request.state.available_laws = available_law_names(session, user.id)
     return templates.TemplateResponse(
         "settings_laws.html",
         {
             "request": request,
             "active": "settings",
             "wide": True,
-            "law_groups": law_groups,
-            "law_limit": FREE_TIER_LAW_LIMIT,
-            "checked_ids": checked_ids,
-            "enabled_count": len(checked_ids),
+            **law_form_context(session, user.id),
             "success": "저장되었습니다.",
         },
     )
@@ -202,39 +194,49 @@ def settings_laws_fragment(
     user: User = Depends(require_login),
     session: Session = Depends(get_session),
 ):
-    law_groups = grouped_toggleable_laws(session)
-    checked_ids = selected_law_ids(session, user.id)
     return templates.TemplateResponse(
         "_settings_laws_form.html",
         {
             "request": request,
-            "law_groups": law_groups,
-            "law_limit": FREE_TIER_LAW_LIMIT,
-            "checked_ids": checked_ids,
-            "enabled_count": len(checked_ids),
+            **law_form_context(session, user.id),
+            # 팝업 안에서만 "닫기" 버튼을 보여준다 — 설정 페이지에서는 닫을 대상이 없다.
+            "in_modal": True,
         },
     )
 
 
 @router.post("/api/settings/laws/fragment")
-def update_settings_laws_fragment(
+async def update_settings_laws_fragment(
     request: Request,
-    law_ids: list[int] = Form(default=[]),
-    known_law_ids: list[int] = Form(default=[]),
     user: User = Depends(require_login),
     session: Session = Depends(get_session),
 ):
-    if len(law_ids) > FREE_TIER_LAW_LIMIT:
+    """팝업에서 AJAX로 호출되는 저장 엔드포인트.
+
+    체크된 법령만 폼으로 받고, 저장 범위(known_law_ids)는 서버가 DB에서 다시 계산한다.
+    체크박스마다 hidden input을 함께 보내면 법령이 수천 건이라 Starlette의 폼 필드 수
+    제한(기본 1000)에 걸린다.
+    """
+    try:
+        form = await request.form()
+        law_ids = {int(v) for v in form.getlist("law_ids")}
+    except Exception:
+        logger.warning("법 활성화 폼 파싱 실패 (user_id=%s)", user.id, exc_info=True)
         return JSONResponse(
-            {"success": False, "error": f"무료 티어는 최대 {FREE_TIER_LAW_LIMIT}개까지만 활성화할 수 있습니다."},
+            {"success": False, "error": "전송된 데이터를 처리할 수 없습니다."},
             status_code=400,
         )
 
-    set_enabled_laws(session, user.id, set(known_law_ids), set(law_ids))
-    
-    from app.law_catalog import available_law_names
-    active_names = available_law_names(session, user.id)
-    return {"success": True, "active_names": active_names}
+    try:
+        set_enabled_laws(session, user.id, toggleable_law_ids(session), law_ids)
+        return {"success": True, "active_names": available_law_names(session, user.id)}
+    except Exception:
+        # 예외 문구를 그대로 돌려주면 내부 구조가 새어 나가므로 로그로만 남긴다.
+        logger.exception("법 활성화 저장 실패 (user_id=%s)", user.id)
+        return JSONResponse(
+            {"success": False, "error": "서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."},
+            status_code=500,
+        )
 
 
 @router.post("/settings/delete-account")
@@ -244,6 +246,7 @@ def delete_account(
     confirm_password: str = Form(...),
     user: User = Depends(require_login),
     session: Session = Depends(get_session),
+    _laws: None = Depends(inject_available_laws),
 ):
     """계정을 실제로 삭제한다. 되돌릴 수 없으므로 아이디·비밀번호를 다시 입력받아
     확인한다 — 로그인된 상태라 세션만으로도 삭제할 수 있지만, 그러면 다른 사람이 잠깐

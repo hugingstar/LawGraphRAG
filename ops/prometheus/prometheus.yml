@@ -1,0 +1,28 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+rule_files:
+  - /etc/prometheus/rules.yml
+
+# 규칙 평가로 발화한 alert 를 Alertmanager 로 넘긴다. 이게 없으면 Prometheus UI
+# 의 Alerts 탭에만 뜨고 아무에게도 통지되지 않는다.
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  # ops 서비스가 웹·Neo4j·Docker 상태를 모아서 내보낸다.
+  # (Neo4j Community 는 자체 메트릭 엔드포인트가 없어 여기가 유일한 경로다)
+  - job_name: lawgraphrag-ops
+    static_configs:
+      - targets: ["ops:8900"]
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

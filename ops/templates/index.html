@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LawGraphRAG Ops</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span id="overall-dot" class="dot dot-unknown"></span>
+      <h1>LawGraphRAG <span class="muted">Ops</span></h1>
+    </div>
+    <nav>
+      <a href="/graph">3D 그래프</a>
+      <a href="http://localhost:3001" target="_blank" rel="noopener">Grafana</a>
+      <a href="http://localhost:9091" target="_blank" rel="noopener">Prometheus</a>
+      <a href="http://localhost:9093" target="_blank" rel="noopener">Alertmanager</a>
+      <a href="http://localhost:7474" target="_blank" rel="noopener">Neo4j Browser</a>
+      <a href="/metrics" target="_blank" rel="noopener">/metrics</a>
+      <button id="refresh" type="button">지금 점검</button>
+    </nav>
+  </header>
+
+  <p class="meta-line">
+    마지막 점검 <span id="last-poll">–</span>
+    · 수집 주기 {{ poll_interval }}초
+    · 소요 <span id="poll-duration">–</span>
+  </p>
+
+  <main id="cards" class="cards">
+    <p class="loading">불러오는 중…</p>
+  </main>
+
+  <script>window.OPS_POLL_INTERVAL = {{ poll_interval }};</script>
+  <script src="/static/ops.js"></script>
+</body>
+</html>

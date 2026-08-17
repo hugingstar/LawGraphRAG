@@ -34,19 +34,95 @@ function renderHighlighted(text, citations) {
   return html;
 }
 
-function renderCitationList(citations) {
-  if (!citations.length) return '<li class="empty">적용되는 조문을 찾지 못했습니다.</li>';
-  return citations
+const UNGROUPED_LABEL = "기타";
+
+// 쟁점 추출이 반드시 훑는 관점(app/citations.py의 REVIEW_CHECKLIST와 같은 순서).
+// 결과가 없어도 자리를 지켜야, 모델이 관점을 통째로 빠뜨렸을 때 "미검토"로 드러난다.
+const REVIEW_CHECKLIST_LABELS = ["형사", "민사", "노동", "가족·상속"];
+
+function citationItemHtml(c) {
+  return `<li>
+    <div class="citation-title">${escapeHtml(c.law_name)} ${escapeHtml(c.article_label)}${
+    c.title ? ` <span class="citation-subtitle">(${escapeHtml(c.title)})</span>` : ""
+  }</div>
+    ${c.issue_label ? `<div class="citation-issue">${escapeHtml(c.issue_label)}</div>` : ""}
+    <div class="citation-reason">${escapeHtml(c.reason)}</div>
+    <a class="citation-link" href="${c.url}" target="_blank" rel="noopener">법제처 원문 보기 →</a>
+  </li>`;
+}
+
+/** 인용 조문을 분야(형사·민사·노동·가족 …)별로 묶어 보여준다.
+ *
+ * 하나의 사실관계는 여러 분야에 동시에 걸리는 것이 정상인데, 조문을 한 줄로 죽 늘어놓으면
+ * 어느 관점에서 나온 조문인지 읽히지 않는다. 같은 조문이 여러 문장에 앵커되어 두 번
+ * 들어올 수 있으므로 분야 안에서 법령+조번호로 중복을 없앤다(하이라이트는 그대로 둔다).
+ *
+ * issues/dismissed를 함께 넘기면(= /analyze 실시간 분석) 분야마다 네 상태를 구분한다:
+ *   조문 있음 / 쟁점은 섰지만 조문 못 찾음 / 검토 후 불성립 / 미검토.
+ * 마지막 상태가 핵심이다 — 쟁점 추출이 관점 하나를 통째로 빠뜨려도 예전에는 그 분야가
+ * 화면에서 아예 사라져, "봤는데 아니다"와 구분이 안 됐다.
+ *
+ * 저장된 사건(results.js)은 이 정보가 없으므로 인자를 안 넘기고, 그때는 조문이 있는
+ * 분야만 묶어 보여준다(없는 분야를 전부 "미검토"로 채우면 거짓말이 된다). */
+function renderCitationList(citations, issues, dismissed) {
+  const live = Array.isArray(issues);
+  const groups = new Map(); // label -> citation[]
+  const ensure = (label) => {
+    if (!groups.has(label)) groups.set(label, []);
+    return groups.get(label);
+  };
+
+  // 체크리스트 -> 추출된 쟁점 -> 불성립 순으로 미리 깔아두면, 조문이 도착하는 순서와
+  // 무관하게 분야 순서가 안정적이다.
+  if (live) {
+    REVIEW_CHECKLIST_LABELS.forEach(ensure);
+    issues.forEach((i) => ensure(i.domain_label || UNGROUPED_LABEL));
+    (dismissed || []).forEach((d) => ensure(d.domain_label || UNGROUPED_LABEL));
+  }
+
+  const seen = new Set();
+  for (const c of citations) {
+    const label = c.domain_label || UNGROUPED_LABEL;
+    const key = `${label}|${c.law_name}|${c.article_label}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    ensure(label).push(c);
+  }
+
+  const reviewed = new Set((issues || []).map((i) => i.domain_label || UNGROUPED_LABEL));
+  const dismissedBy = new Map(
+    (dismissed || []).map((d) => [d.domain_label || UNGROUPED_LABEL, d.reason])
+  );
+
+  function statusHtml(label, count) {
+    if (count) return `<span class="domain-count">${count}개 조문</span>`;
+    if (dismissedBy.has(label)) {
+      const reason = dismissedBy.get(label);
+      return (
+        '<span class="domain-count domain-dismissed">해당 사항 없음</span>' +
+        (reason ? `<span class="domain-reason">${escapeHtml(reason)}</span>` : "")
+      );
+    }
+    if (reviewed.has(label)) {
+      return '<span class="domain-count">검토함 · 적용 조문 없음</span>';
+    }
+    return '<span class="domain-count domain-unreviewed">미검토</span>';
+  }
+
+  const rendered = [...groups.entries()]
     .map(
-      (c) => `<li>
-        <div class="citation-title">${escapeHtml(c.law_name)} ${escapeHtml(c.article_label)}${
-        c.title ? ` <span class="citation-subtitle">(${escapeHtml(c.title)})</span>` : ""
-      }</div>
-        <div class="citation-reason">${escapeHtml(c.reason)}</div>
-        <a class="citation-link" href="${c.url}" target="_blank" rel="noopener">법제처 원문 보기 →</a>
+      ([label, items]) => `<li class="citation-domain">
+        <div class="citation-domain-head">
+          <span class="domain-badge">${escapeHtml(label)}</span>
+          ${statusHtml(label, items.length)}
+        </div>
+        ${items.length ? `<ul class="citation-sublist">${items.map(citationItemHtml).join("")}</ul>` : ""}
       </li>`
     )
     .join("");
+
+  if (!rendered) return '<li class="empty">적용되는 조문을 찾지 못했습니다.</li>';
+  return rendered;
 }
 
 function bindHighlightClicks(root) {

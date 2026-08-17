@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.auth import require_manager
 from app.db import get_session
+from app.law_catalog import inject_available_laws
 from app.models import Incident, IncidentCategory, Region, User
 from app.routers.regions import sido_list, sigungu_list
 from app.serializers import incident_to_dict
@@ -21,6 +22,7 @@ def review_page(
     category_id: int | None = None,
     user: User = Depends(require_manager),
     session: Session = Depends(get_session),
+    _laws: None = Depends(inject_available_laws),
 ):
     return templates.TemplateResponse(
         "review.html",

@@ -1,4 +1,5 @@
 import json
+import logging
 
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
@@ -6,16 +7,24 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.annotate import annotate_text, annotate_text_stream, citation_to_dict
+from app.annotate import annotate_text, annotate_text_stream
 from app.auth import SESSION_COOKIE, require_login, user_for_token
+from app.citations import citation_to_dict, dismissed_to_dict, issue_to_dict
 from app.db import SessionLocal, engine, get_session
-from app.law_catalog import available_law_names
+from app.law_catalog import inject_available_laws
 from app.migrate import finalize_migration, run_migrations
 from app.models import Base, User
 from app.regions_seed import seed_regions
 from app.seed import seed_reference_data
 from app.templating import templates
-from app.routers import auth, dashboard, incidents, regions, results, review, settings
+from app.routers import auth, dashboard, incidents, mypage, regions, results, review, settings
+
+
+# uvicorn은 자기 로거만 설정해서 app.* 로거는 핸들러 없이 남는다 — 그러면 조문 분석이
+# 왜 빈손으로 끝났는지(후보 없음/LLM 실패/인용문 불일치) 컨테이너 로그에 안 남는다.
+# 루트는 WARNING으로 둬서 서드파티(httpx 등) 로그가 쏟아지지 않게 하고, 우리 모듈만 INFO.
+logging.basicConfig(level=logging.WARNING, format="%(levelname)s [%(name)s] %(message)s")
+logging.getLogger("app").setLevel(logging.INFO)
 
 
 class NoCacheStaticFiles(StaticFiles):
@@ -31,6 +40,7 @@ app.mount("/static", NoCacheStaticFiles(directory="app/static"), name="static")
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(incidents.router)
+app.include_router(mypage.router)
 app.include_router(regions.router)
 app.include_router(results.router)
 app.include_router(review.router)
@@ -43,6 +53,7 @@ async def attach_current_user(request: Request, call_next):
     템플릿과 의존성이 모두 이 값을 본다."""
     request.state.user = None
     request.state.profile = {}
+    request.state.available_laws = []
     token = request.cookies.get(SESSION_COOKIE)
     if token:
         session = SessionLocal()
@@ -95,7 +106,7 @@ def on_startup():
 def index(
     request: Request,
     user: User = Depends(require_login),
-    session: Session = Depends(get_session),
+    _laws: None = Depends(inject_available_laws),
 ):
     return templates.TemplateResponse(
         "index.html",
@@ -103,7 +114,6 @@ def index(
             "request": request,
             "active": "lookup",
             "wide": True,
-            "available_laws": available_law_names(session, user.id),
         },
     )
 
@@ -136,7 +146,14 @@ def analyze_stream(text: str = Form(...), user: User = Depends(require_login)):
         session = SessionLocal()
         try:
             for kind, payload in annotate_text_stream(session, text, user_id):
-                if kind == "citation":
+                if kind == "issues":
+                    event = {
+                        "type": "issues",
+                        "facts": payload.facts,
+                        "issues": [issue_to_dict(i) for i in payload.issues],
+                        "dismissed": [dismissed_to_dict(d) for d in payload.dismissed],
+                    }
+                elif kind == "citation":
                     event = {"type": "citation", "citation": citation_to_dict(payload)}
                 else:  # "done"
                     event = {"type": "done", "citations": [citation_to_dict(c) for c in payload]}

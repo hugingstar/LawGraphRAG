@@ -1,0 +1,80 @@
+groups:
+  - name: lawgraphrag
+    rules:
+      - alert: ComponentDown
+        expr: lawgraphrag_up == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.component }} 응답 없음"
+          description: "2분 이상 점검에 실패하고 있습니다."
+
+      - alert: OpsSnapshotStale
+        # 폴러가 멈췄는데 /metrics 는 계속 응답하는 상황을 잡는다.
+        expr: lawgraphrag_snapshot_age_seconds > 180
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "ops 폴러가 갱신되지 않음"
+
+      - alert: PostgresConnectionsHigh
+        expr: lawgraphrag_pg_connections / lawgraphrag_pg_max_connections > 0.8
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Postgres 연결이 max_connections 의 80% 초과"
+
+      - alert: PostgresCacheHitLow
+        # 일반적인 OLTP 기준은 99% 이지만, 이 DB 는 article_chunks(30GB, 임베딩)가
+        # shared_buffers 를 한참 넘어서 실측 적중률이 ~34% 다. 90%로 잡으면 상시
+        # 발화한다. 임계값을 실제 기준선 아래로 두어 "평소보다 나빠질 때"만 잡는다.
+        expr: lawgraphrag_pg_cache_hit_ratio < 0.2
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "Postgres 버퍼 캐시 적중률이 기준선(~34%) 아래로 떨어짐"
+
+      - alert: LongRunningQueries
+        expr: lawgraphrag_pg_long_running_queries > 3
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "30초 이상 실행 중인 쿼리가 3개 초과"
+
+      - alert: GraphStoppedGrowing
+        # 적재 작업을 돌리는 중인데 6시간 동안 노드가 늘지 않으면 파이프라인이 막힌 것이다.
+        expr: increase(lawgraphrag_neo4j_nodes[6h]) == 0 and lawgraphrag_neo4j_nodes > 0
+        for: 30m
+        labels: { severity: info }
+        annotations:
+          summary: "그래프 노드 수가 6시간째 그대로"
+
+      - alert: ContainerNotRunning
+        expr: lawgraphrag_container_up == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "컨테이너 {{ $labels.name }} 비정상 ({{ $labels.status }})"
+
+      - alert: HttpErrorRateHigh
+        # 5xx 는 앱 버그다. 4xx 는 로그인 실패 등 정상 흐름에도 나오므로 제외한다.
+        expr: sum(rate(lawgraphrag_http_requests_total{status=~"5.."}[5m])) > 0.1
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "5xx 응답이 초당 0.1건을 넘고 있음"
+
+      - alert: IncidentBacklog
+        # 특정 상태에 20건 넘게 쌓이면 처리가 밀리고 있다는 뜻이다.
+        expr: lawgraphrag_incidents_by_status > 20
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: "신청 {{ $labels.status }} 상태에 {{ $value }}건 적체"
+
+      - alert: WebSlow
+        expr: lawgraphrag_check_latency_ms{component="web"} > 3000
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "웹 응답이 3초를 넘고 있음"

@@ -1,0 +1,12 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    # 대시보드 JSON 이 이 uid 를 참조한다. 고정해 두지 않으면 재생성 때마다
+    # uid 가 바뀌어 패널이 전부 "datasource not found" 가 된다.
+    uid: lawgraphrag-prom
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

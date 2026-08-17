@@ -76,11 +76,16 @@ function renderEditableCitationList(citations) {
   if (!citations.length) return '<li class="empty">적용되는 조문을 찾지 못했습니다.</li>';
   return citations
     .map(
+      // 여기서는 분야별로 묶지 않는다 — data-index가 incident.citations 배열 순서와
+      // 1:1로 맞아야 제거/추가가 동작한다. 분야는 배지로만 보여준다.
       (c, i) => `<li data-index="${i}">
         <button type="button" class="citation-remove-btn" data-role="remove-citation" data-index="${i}" aria-label="조문 삭제">×</button>
-        <div class="citation-title">${escapeHtml(c.law_name)} ${escapeHtml(c.article_label)}${
+        <div class="citation-title">${
+          c.domain_label ? `<span class="domain-badge">${escapeHtml(c.domain_label)}</span> ` : ""
+        }${escapeHtml(c.law_name)} ${escapeHtml(c.article_label)}${
         c.title ? ` <span class="citation-subtitle">(${escapeHtml(c.title)})</span>` : ""
       }</div>
+        ${c.issue_label ? `<div class="citation-issue">${escapeHtml(c.issue_label)}</div>` : ""}
         <div class="citation-reason">${escapeHtml(c.reason)}</div>
         <a class="citation-link" href="${c.url}" target="_blank" rel="noopener">법제처 원문 보기 →</a>
       </li>`
@@ -352,6 +357,7 @@ function renderIncidentList(incidents) {
         <span class="incident-excerpt">${escapeHtml(contentLabel(i))}</span>
         <span class="incident-date" title="사고일시: ${i.occurred_at ? formatDateTime(i.occurred_at) : "미기재"}">${formatDate(i.occurred_at)}</span>
         <span class="incident-date" title="요청일시: ${formatDateTime(i.created_at)}">${formatDate(i.created_at)}</span>
+        <span class="incident-chevron" aria-hidden="true">▶</span>
       </div>
       <div class="incident-detail"></div>
     </li>`

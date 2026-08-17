@@ -22,24 +22,30 @@
 </div>
 {% endmacro %}
 
-{# "활성화 된 법" 카드. Advisor·나의 요청·전국 사건 모니터링 세 화면에서 똑같이 쓰므로
-   매크로로 모은다. 각 페이지 라우터가 available_laws(법령명 리스트)를 넘긴다. #}
+{# "활성화 된 법" 바. 로그인한 모든 화면 상단(_layout.html)에 공통으로 뜨므로
+   매크로로 모은다. 미들웨어(app/main.py)가 request.state.available_laws로 넘긴다.
+   목록이 길면 화면이 너무 길어지므로 기본은 접힌 상태고, 클릭(요약 줄)으로 펼친다. #}
 {% macro law_list_card(available_laws) %}
-<section class="card law-list-card">
+<section class="card law-list-card law-bar" data-law-bar>
   <div class="law-list-head">
-    <h2 class="card-title">활성화 된 법</h2>
+    <button type="button" class="law-bar-toggle" data-law-bar-toggle aria-expanded="false" aria-controls="law-bar-body">
+      <span class="law-bar-chevron" aria-hidden="true">▸</span>
+      <h2 class="card-title">활성화 된 법 <span class="law-bar-count">{{ available_laws|length }}</span></h2>
+    </button>
     <button type="button" class="btn-link-small" data-open-law-modal>법 활성화</button>
   </div>
-  <p class="hint law-list-hint">아래 법을 우선순위로 두고 검색합니다.</p>
-  {% if available_laws %}
-  <ul class="law-list">
-    {% for name in available_laws %}
-    <li>{{ name }}</li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="empty-state">아직 수집된 법령이 없습니다.</p>
-  {% endif %}
+  <div id="law-bar-body" class="law-bar-body" data-law-bar-body hidden>
+    <p class="hint law-list-hint">아래 법을 우선순위로 두고 검색합니다.</p>
+    {% if available_laws %}
+    <ul class="law-list">
+      {% for name in available_laws %}
+      <li>{{ name }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty-state">아직 수집된 법령이 없습니다.</p>
+    {% endif %}
+  </div>
 </section>
 {% endmacro %}
 

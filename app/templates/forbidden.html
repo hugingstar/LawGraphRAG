@@ -1,13 +1,17 @@
 {% extends "_layout.html" %}
 {% block content %}
-      <div class="hero">
-        <h1>접근 권한이 없습니다</h1>
-        <p class="hint">{{ message or "이 페이지에 접근할 권한이 없습니다." }}</p>
-      </div>
-      <section class="card input-card">
-        <p class="hint">필요한 권한이 있다면 안전부서 관리자에게 문의하세요.</p>
-        <div class="action-row">
-          <a class="btn-link-strong" href="/results">나의 요청 리스트로 돌아가기</a>
+      {# 로그인 화면과 같은 좁은 가운데 정렬 레이아웃(.auth-wrap)을 쓴다 — 카드 하나뿐인
+         안내 페이지라 본문 폭을 다 쓰면 오히려 허전해 보인다. #}
+      <div class="auth-wrap">
+        <div class="hero">
+          <h1>접근 권한이 없습니다</h1>
+          <p class="hint">{{ message or "이 페이지에 접근할 권한이 없습니다." }}</p>
         </div>
-      </section>
+        <section class="card input-card">
+          <p class="hint">필요한 권한이 있다면 안전부서 관리자에게 문의하세요.</p>
+          <div class="action-row">
+            <a class="btn-link-strong" href="/results">나의 요청 리스트로 돌아가기</a>
+          </div>
+        </section>
+      </div>
 {% endblock %}

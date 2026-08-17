@@ -1,21 +1,21 @@
 """검색 가능한 법령 이름 조회 및 사용자별 법 활성화.
 
-Advisor(`/`)·나의 요청(`/request`)·전국 사건 모니터링(`/dashboard`) 세 화면이 모두
-"지금 이용 가능한 법 리스트" 카드를 보여주므로 조회 로직을 한 곳에 모은다.
+로그인한 모든 화면 상단에 "활성화 된 법" 바(_layout.html)가 뜨므로 조회 로직을 한 곳에
+모은다. 화면을 실제로 그리는 라우트만 inject_available_laws를 Depends로 붙인다 —
+미들웨어에서 매 요청(정적 파일·API 호출 포함)마다 조회하면 페이지 이동이 눈에 띄게
+느려진다.
 
 어떤 법을 검색에 쓸지는 계정마다 다르게 고를 수 있다(app.models.UserLawSelection) —
 로그아웃 후 다시 로그인해도 그 사람이 마지막으로 고른 조합이 그대로 남는다.
 """
 
+from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
+from app.auth import require_login
+from app.db import get_session
 from app.law_category import LAW_CATEGORIES
-from app.models import Law, LawCategory, UserLawSelection
-
-# 무료 티어에서 한 계정이 동시에 활성화할 수 있는 법의 최대 개수. 유료 티어가 생기기
-# 전까지는 모든 계정에 적용되는 단일 한도다(app.routers.settings.update_settings_laws에서
-# 강제한다).
-FREE_TIER_LAW_LIMIT = 10
+from app.models import Law, LawCategory, User, UserLawSelection
 
 
 def available_law_names(session: Session, user_id: int) -> list[str]:
@@ -29,6 +29,16 @@ def available_law_names(session: Session, user_id: int) -> list[str]:
         .order_by(Law.law_name)
         .all()
     ]
+
+
+def inject_available_laws(
+    request: Request,
+    user: User = Depends(require_login),
+    session: Session = Depends(get_session),
+) -> None:
+    """페이지 라우터가 Depends(inject_available_laws)로 붙이면 request.state.available_laws가
+    채워져 _layout.html 상단의 "활성화 된 법" 바에 쓰인다."""
+    request.state.available_laws = available_law_names(session, user.id)
 
 
 def grouped_toggleable_laws(session: Session) -> list[tuple[str, list[Law]]]:
@@ -57,6 +67,18 @@ def grouped_toggleable_laws(session: Session) -> list[tuple[str, list[Law]]]:
     ]
 
 
+def toggleable_law_ids(session: Session) -> set[int]:
+    """설정 화면에 체크박스로 그려지는 전체 법령 id — set_enabled_laws의 known_law_ids로 쓴다.
+
+    체크박스 하나마다 hidden input을 같이 보내는 방식은 법령이 수천 건이라 폼 필드 수
+    제한에 걸리므로, 저장 시점에 서버가 같은 범위를 DB에서 다시 계산한다
+    (grouped_toggleable_laws와 같은 조건: 폐지되지 않은 전체 법령)."""
+    return {
+        law_id
+        for (law_id,) in session.query(Law.id).filter(Law.repealed_at.is_(None)).all()
+    }
+
+
 def selected_law_ids(session: Session, user_id: int) -> set[int]:
     """이 사용자가 현재 켜 둔 law.id 집합."""
     return {
@@ -70,11 +92,11 @@ def selected_law_ids(session: Session, user_id: int) -> set[int]:
 def set_enabled_laws(
     session: Session, user_id: int, known_law_ids: set[int], enabled_law_ids: set[int]
 ) -> None:
-    """화면에 그려졌던 law.id(known_law_ids) 범위 안에서만 이 사용자의 선택을 갱신한다.
+    """고를 수 있었던 law.id(known_law_ids) 범위 안에서만 이 사용자의 선택을 갱신한다.
 
-    known_law_ids로 범위를 제한하는 이유: 화면을 그린 뒤 저장하는 사이에 수집 파이프라인이
-    새 법령을 추가했을 수 있는데, 그 법령은 애초에 체크박스로 제출되지 않으므로 "제출 안 됨 =
-    끄기"로 취급하면 사용자가 건드리지도 않은 법이 꺼져 버린다."""
+    known_law_ids로 범위를 제한하는 이유: 체크박스로 그려지지 않는 법(폐지되어 목록에서
+    빠진 법)은 애초에 제출될 수 없으므로, "제출 안 됨 = 끄기"로 취급하면 사용자가 건드리지도
+    않은 법이 꺼져 버린다. 호출부는 toggleable_law_ids()로 그 범위를 구한다."""
     if not known_law_ids:
         return
     enabled_law_ids = enabled_law_ids & known_law_ids

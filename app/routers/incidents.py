@@ -7,11 +7,12 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.annotate import annotate_text, citation_to_dict
+from app.annotate import annotate_text
+from app.citations import citation_to_dict
 from app.auth import require_login, require_manager
 from app.db import get_session
 from app.graph_incidents import sync_incident
-from app.law_catalog import available_law_names
+from app.law_catalog import inject_available_laws
 from app.models import (
     COMMENT_KIND_LABELS,
     COMMENT_KINDS,
@@ -45,6 +46,7 @@ def request_page(
     incident_id: int | None = None,
     user: User = Depends(require_login),
     session: Session = Depends(get_session),
+    _laws: None = Depends(inject_available_laws),
 ):
     # 이름/직종/연락처는 프로필에서 가져와 보여주기만 한다. 반면 '사건 발생 지역'은
     # 신고자 소속과 다를 수 있으므로 프로필에서 파생하지 않고 폼에서 직접 받는다
@@ -73,7 +75,6 @@ def request_page(
             "sido_list": sido_list(session),
             "sigungu_list": sigungu_list(session),
             "categories": session.query(IncidentCategory).order_by(IncidentCategory.id).all(),
-            "available_laws": available_law_names(session, user.id),
             "wide": True,
             "incident": incident,
         },
@@ -538,6 +539,12 @@ class CitationIn(BaseModel):
     end: int
     reason: str = ""
     url: str
+    # 분석 시점의 쟁점 분야. 여기 선언하지 않으면 관리자가 마커를 한 번 편집하는 순간
+    # model_dump에서 빠져 저장된 인용의 분야 배지가 통째로 사라진다.
+    # 옛 데이터에는 없는 값이라 기본값 None으로 둔다.
+    domain: str | None = None
+    domain_label: str | None = None
+    issue_label: str | None = None
 
 
 @router.post("/api/incidents/{incident_id}/citations")

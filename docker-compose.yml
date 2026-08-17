@@ -39,6 +39,7 @@ services:
     env_file: .env
     environment:
       POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
       NEO4J_URI: bolt://neo4j:7687
     ports:
       - "8000:8000"

@@ -1,35 +1,51 @@
-<form method="post" action="/settings/laws" data-law-limit="{{ law_limit }}" id="law-activation-form">
-  <div class="law-toggle-save-bar" data-law-toggle-savebar>
-    <span data-law-toggle-count><b>{{ enabled_count }}</b> / {{ law_limit }}개 선택됨</span>
-    <button type="submit">저장</button>
-  </div>
+{# 설정 > 법 활성화 폼. 설정 페이지(/settings/laws)와 팝업(법 활성화 모달)에서 같이 쓴다.
+   in_modal이 참일 때만 "닫기" 버튼을 보여준다 — 설정 페이지에는 닫을 대상이 없다.
+   known_law_ids hidden input은 두지 않는다: 법령이 수천 건이라 폼 필드 수 제한에 걸리므로
+   저장 범위는 서버가 DB에서 다시 계산한다(app.law_catalog.toggleable_law_ids). #}
+<form method="post" action="/settings/laws" data-law-form id="law-activation-form" class="law-form">
 
-  <div class="law-toggle-actions">
-    <button type="button" class="btn-link" data-law-toggle-all="false">전체 해제</button>
-  </div>
-
-  {% if law_groups %}
-  {% for group_name, group_laws in law_groups %}
-  {% set group_checked = group_laws|selectattr('id', 'in', checked_ids)|list %}
-  <details class="law-toggle-group" {% if group_checked %}open{% endif %}>
-    <summary class="law-toggle-group-title">
-      {{ group_name }}
-      <span class="law-toggle-group-count">
-        {{ group_checked|length }}/{{ group_laws|length }}개 선택됨
-      </span>
-    </summary>
-    <div class="law-toggle-grid">
-      {% for law in group_laws %}
-      <label class="law-toggle-item">
-        <input type="hidden" name="known_law_ids" value="{{ law.id }}">
-        <input type="checkbox" name="law_ids" value="{{ law.id }}" {{ "checked" if law.id in checked_ids else "" }}>
-        <span>{{ law.law_name }}</span>
-      </label>
-      {% endfor %}
+  {# ── 상단 고정: 선택 개수 + 버튼 ── #}
+  <div class="law-form-bar">
+    <span data-law-toggle-count><b>{{ enabled_count }}</b> / {{ law_total }}개 선택됨</span>
+    <div class="law-form-bar-actions">
+      <button type="button" class="btn-link" data-law-toggle-all="true">전체 선택</button>
+      <button type="button" class="btn-link" data-law-toggle-all="false">전체 해제</button>
+      {% if in_modal %}
+      <button type="button" class="btn-link" data-close-law-modal>닫기</button>
+      {% endif %}
+      <button type="submit">저장</button>
     </div>
-  </details>
-  {% endfor %}
-  {% else %}
-  <p class="empty-state">아직 수집된 법령이 없습니다.</p>
-  {% endif %}
+  </div>
+
+  {# ── 검색창 ── #}
+  <div class="law-form-search">
+    <input type="text" class="text-input" data-law-search placeholder="법령 이름 검색..." autocomplete="off">
+  </div>
+
+  {# ── 법령 목록 (팝업에서는 이 영역만 스크롤된다) ── #}
+  <div class="law-form-list">
+    {% if law_groups %}
+    {% for group_name, group_laws in law_groups %}
+    {% set group_checked = group_laws|selectattr('id', 'in', checked_ids)|list %}
+    <details class="law-toggle-group" {% if group_checked %}open{% endif %}>
+      <summary class="law-toggle-group-title">
+        {{ group_name }}
+        <span class="law-toggle-group-count">
+          {{ group_checked|length }}/{{ group_laws|length }}개 선택됨
+        </span>
+      </summary>
+      <div class="law-toggle-grid">
+        {% for law in group_laws %}
+        <label class="law-toggle-item">
+          <input type="checkbox" name="law_ids" value="{{ law.id }}" {{ "checked" if law.id in checked_ids else "" }}>
+          <span>{{ law.law_name }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </details>
+    {% endfor %}
+    {% else %}
+    <p class="empty-state">아직 수집된 법령이 없습니다.</p>
+    {% endif %}
+  </div>
 </form>

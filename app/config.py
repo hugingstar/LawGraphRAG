@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     embedding_model: str = "intfloat/multilingual-e5-large"
     embedding_dim: int = 1024
 
+    # 후보 재순위(app/rerank.py). 로컬 GPU 모델이라 API 쿼터와 무관하지만 첫 실행 시
+    # 모델을 내려받고(약 2GB) GPU 메모리를 더 쓰므로, 끄고 싶으면 RERANK_ENABLED=false.
+    rerank_model: str = "BAAI/bge-reranker-v2-m3"
+    rerank_enabled: bool = True
+
     neo4j_uri: str = "bolt://neo4j:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: str = "change_me"

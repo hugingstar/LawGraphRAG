@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+WORKDIR /srv
+
+COPY requirements-ops.txt .
+RUN pip install --no-cache-dir -r requirements-ops.txt
+
+COPY ops ./ops
+
+# 3d-force-graph(three.js 번들 포함)를 이미지에 넣어 둔다. 폐쇄망 서버에서도
+# 3D 화면이 뜨게 하려는 것이고, 빌드 시 다운로드가 막혀 있으면 조용히 건너뛴 뒤
+# 브라우저가 CDN 으로 폴백한다(graph3d.html 의 onerror).
+RUN mkdir -p ops/static/vendor && \
+    (python -c "import urllib.request; urllib.request.urlretrieve('https://unpkg.com/3d-force-graph@1/dist/3d-force-graph.min.js', 'ops/static/vendor/3d-force-graph.min.js')" \
+     || echo 'vendor 다운로드 실패 - CDN 폴백을 사용합니다')
+
+EXPOSE 8900
+
+CMD ["uvicorn", "ops.main:app", "--host", "0.0.0.0", "--port", "8900"]

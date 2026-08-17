@@ -225,6 +225,7 @@ function renderList(incidents) {
         <span class="incident-excerpt">${escapeHtml(contentLabel(i))}</span>
         <span class="incident-date" title="사고일시: ${i.occurred_at ? formatDateTime(i.occurred_at) : "미기재"}">${formatDate(i.occurred_at)}</span>
         <span class="incident-date" title="요청일시: ${formatDateTime(i.created_at)}">${formatDate(i.created_at)}</span>
+        <span class="incident-chevron" aria-hidden="true">▶</span>
       </div>
       <div class="incident-detail"></div>
     </li>`

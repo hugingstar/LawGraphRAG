@@ -1,9 +1,13 @@
 """법령 분야(Domain) 대분류 및 분류 규칙.
 
-법령이 수천 건으로 늘어나면 벡터/그래프 검색을 분야로 먼저 좁혀야 무관한 분야의 조문이
-후보에 섞이지 않는다. 법령 하나하나를 LLM으로 분류하면(5천 건 이상) 무료 쿼터로는 시간이
-너무 걸리므로, 법령명 접미사/키워드 기반의 결정적 규칙으로 분류한다. 한국 법령명은
-"~법", "~에 관한 법률"처럼 접미사가 분야를 강하게 암시하므로 규칙만으로도 충분히 정확하다.
+법령명 접미사/키워드 기반의 결정적 규칙으로 분류한다(법령 하나하나를 LLM으로 분류하면
+5천 건 이상이라 무료 쿼터로는 시간이 너무 걸린다). 한국 법령명은 "~법", "~에 관한 법률"처럼
+접미사가 분야를 강하게 암시하므로 규칙만으로도 대체로 맞는다.
+
+이 분야는 설정 > 법 활성화 화면의 묶음(app.law_catalog.grouped_toggleable_laws)에 쓰인다.
+조문 검색을 분야로 미리 좁히는 데는 쓰지 않는다 — 규칙이 판단을 못 한 'etc'가 5,611건 중
+3,387건이라 후보에서 그만큼이 통째로 빠지고, 분야 조인이 붙으면 HNSW 인덱스도 안 쓰인다
+(app.retrieval._vector_candidates 참고).
 """
 
 import re
@@ -115,53 +119,3 @@ def classify_law(law_name: str, department: str | None = None) -> str:
         return _DEPARTMENT_RULES[department]
 
     return "etc"
-
-
-_query_domain_chain = None
-
-
-def _build_query_domain_chain():
-    from langchain_core.prompts import PromptTemplate
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    from pydantic import BaseModel, Field
-
-    from app.config import settings
-
-    class _DomainsResponse(BaseModel):
-        codes: list[str] = Field(
-            default_factory=list,
-            description=f"관련도가 높은 순으로 최대 3개. 다음 코드 중에서만 고를 것: {', '.join(LAW_CATEGORY_CODES)}",
-        )
-
-    llm = ChatGoogleGenerativeAI(
-        model=settings.gemini_model,
-        google_api_key=settings.gemini_api_key,
-        temperature=0,
-    )
-    categories_desc = "\n".join(f"- {code}: {name}" for code, name in LAW_CATEGORIES)
-    prompt = PromptTemplate.from_template(
-        "다음 글이 어떤 법률 분야와 가장 관련이 깊은지 판단하세요.\n\n"
-        "[분야 목록]\n{categories_desc}\n\n"
-        "[글]\n{text}\n\n"
-        "관련도가 높은 분야를 최대 3개까지 코드로만 고르세요. 사고/피해 서술문은 여러 분야에 "
-        "걸치는 경우가 많으니(예: 작업 중 부상은 노동+산업안전+민사 배상이 동시에 걸릴 수 있음) "
-        "관련 가능성이 있으면 넓게 포함하세요. 애매하면 빈 목록도 가능합니다."
-    ).partial(categories_desc=categories_desc)
-    return prompt | llm.with_structured_output(_DomainsResponse)
-
-
-def classify_query_domains(text: str) -> list[str] | None:
-    """사용자 질의/진술문이 어떤 법령 분야에 속하는지 LLM으로 1~2개 판단한다.
-
-    검색 필터링의 보조 신호일 뿐이므로, 실패하거나 애매하면 None을 돌려줘 상위 호출부가
-    분야 제한 없이(기존과 동일하게) 전체 검색으로 폴백하게 한다.
-    """
-    global _query_domain_chain
-    try:
-        if _query_domain_chain is None:
-            _query_domain_chain = _build_query_domain_chain()
-        result = _query_domain_chain.invoke({"text": text})
-        codes = [c for c in result.codes if c in LAW_CATEGORY_CODES]
-        return codes or None
-    except Exception:
-        return None

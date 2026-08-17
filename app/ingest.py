@@ -108,6 +108,16 @@ def upsert_article(session: Session, law: Law, article_data: dict) -> tuple[Arti
     return article, True
 
 
+# 청크 하나가 최소 이 길이는 되도록 짧은 줄을 합친다(app.chunking.merge_short_sentences).
+# 법령 원문은 항·호·목마다 줄이 바뀌어서 병합 없이는 "1.", "①" 같은 조각까지 청크가 된다.
+# 같은 법령·같은 질의로 A/B 해보면 병합 없음 8/16 → 병합 150자 10/16, 청크 수는 2,403 → 770개.
+MIN_SENTENCE_CHARS = 150
+
+# 청크 앞에 "법령명 제N조(제목)" 맥락 줄을 붙여 임베딩하는 것도 시험했지만 오히려 나빴다
+# (같은 조건에서 10/16 → 8/16). 파서 수정 뒤로는 조문 원문 첫 줄이 이미 "제42조(추락의 방지)"라
+# 맥락이 청크 안에 들어 있고, 법령명을 덧붙이면 사고 진술문과의 유사도만 희석된다.
+
+
 def embed_and_store_chunks(session: Session, articles: list[Article]) -> int:
     """여러 조문의 청크를 한 번에 임베딩한다.
 
@@ -116,7 +126,9 @@ def embed_and_store_chunks(session: Session, articles: list[Article]) -> int:
     """
     pending: list[tuple[Article, object]] = []
     for article in articles:
-        for chunk in chunk_text(article.full_text, window_size=3, overlap=1):
+        for chunk in chunk_text(
+            article.full_text, window_size=3, overlap=1, min_sentence_chars=MIN_SENTENCE_CHARS
+        ):
             pending.append((article, chunk))
 
     if not pending:

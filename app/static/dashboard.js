@@ -52,17 +52,25 @@ function renderRank(rows, labelFor) {
   }
   // 지역명 아래 작은 글씨로 그 지역에서 가장 많은 사건 유형과 건수를 덧붙인다. 폭이 16rem뿐인
   // 사이드 컬럼이라 한 줄에 다 넣으면 넘치므로 2번째 줄로 내리고, 둘 다 말줄임으로 막는다.
+  // 1위 지역을 100%로 잡은 미니 게이지를 이름 아래에 깔아, 숫자를 읽지 않아도
+  // 지역 간 격차가 한눈에 들어오게 한다(지도의 색 농도와 같은 정보를 목록에서 반복).
+  const rankMax = Math.max(1, ...top.map((r) => r.count));
   el.innerHTML = top
     .map((r) => {
       const sub = r.top_category
         ? `<div class="rank-sub">최다유형 · ${escapeHtml(r.top_category)} ${r.top_category_count}건</div>`
         : "";
+      // li가 flex(순위 배지 + 본문)라서 이름/게이지/최다유형은 rank-body 하나로 묶어
+      // 그 안에서 세로로 쌓이게 한다.
       return `<li>
-        <div class="rank-row">
-          <span class="rank-name">${escapeHtml(labelFor(r))}</span>
-          <span class="rank-count">${r.count}건</span>
+        <div class="rank-body">
+          <div class="rank-row">
+            <span class="rank-name">${escapeHtml(labelFor(r))}</span>
+            <span class="rank-count">${r.count}건</span>
+          </div>
+          <span class="rank-bar" aria-hidden="true"><span style="width:${(r.count / rankMax) * 100}%"></span></span>
+          ${sub}
         </div>
-        ${sub}
       </li>`;
     })
     .join("");

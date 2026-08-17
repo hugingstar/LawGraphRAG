@@ -1,9 +1,16 @@
+{% import "_macros.html" as macros %}
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Law Owly{% endblock %}</title>
+  {# style.css의 본문 폰트가 "Pretendard Variable"을 첫 순위로 두고 있는데 실제로 받아오는
+     곳이 없어서, 지금까지는 대부분의 환경에서 시스템 기본 고딕으로 떨어졌다. 여기서 웹폰트를
+     불러온다. 네트워크가 막혀 실패하면 기존처럼 -apple-system/Segoe UI/Noto Sans KR로
+     자연스럽게 대체되므로 화면이 깨지지는 않는다. #}
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="/static/style.css?v={{ v }}">
   {% block head %}{% endblock %}
 </head>
@@ -45,6 +52,7 @@
         <a href="/dashboard" class="{{ 'active' if active == 'dashboard' else '' }}">전국 사건 모니터링</a>
         <a href="/request" class="{{ 'active' if active == 'request' else '' }}">나의 요청</a>
         <a href="/results" class="{{ 'active' if active == 'results' else '' }}">나의 요청 리스트</a>
+        <a href="/mypage" class="{{ 'active' if active == 'mypage' else '' }}">마이페이지</a>
         <a href="/settings" class="{{ 'active' if active == 'settings' else '' }}">설정</a>
         {% if request.state.user.is_manager %}
         <span class="topnav-sep" aria-hidden="true"></span>
@@ -53,6 +61,12 @@
       </nav>
       {% endif %}
     </header>
+
+    {% if request.state.user and not hide_nav %}
+    <div class="law-bar-outer {{ 'wide' if wide else '' }}">
+      {{ macros.law_list_card(request.state.available_laws) }}
+    </div>
+    {% endif %}
 
     <main class="{{ 'wide' if wide else '' }}">
       {% block content %}{% endblock %}
@@ -74,6 +88,9 @@
       </div>
     </div>
   </dialog>
+
+  <div class="toast-container" id="toast-container"></div>
+
   <script src="/static/law_modal.js?v={{ v }}"></script>
 
   {% block scripts %}{% endblock %}

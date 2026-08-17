@@ -1,0 +1,13 @@
+# ops 서비스 전용 의존성.
+# app 쪽 requirements.txt 와 일부러 분리했다. torch·sentence-transformers 같은
+# 무거운 것들을 끌고 오면 모니터링 이미지 빌드가 수 GB / 수 분짜리가 되고,
+# 앱 의존성을 바꿀 때마다 모니터링까지 재빌드해야 한다.
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+jinja2==3.1.4
+httpx==0.27.2
+psycopg[binary]>=3.2.10
+neo4j>=5.24.0
+docker>=7.1.0
+prometheus-client>=0.21.0
+pydantic-settings>=2.5.2

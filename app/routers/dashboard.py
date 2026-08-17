@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import require_login
 from app.db import get_session
-from app.law_catalog import available_law_names
+from app.law_catalog import inject_available_laws
 from app.models import INCIDENT_STATUS_LABELS, Incident, IncidentCategory, Region, User
 from app.templating import templates
 
@@ -18,7 +18,7 @@ router = APIRouter()
 def dashboard_page(
     request: Request,
     user: User = Depends(require_login),
-    session: Session = Depends(get_session),
+    _laws: None = Depends(inject_available_laws),
 ):
     today = datetime.date.today()
     return templates.TemplateResponse(
@@ -29,7 +29,6 @@ def dashboard_page(
             "wide": True,
             "default_start": (today - datetime.timedelta(days=30)).isoformat(),
             "default_end": today.isoformat(),
-            "available_laws": available_law_names(session, user.id),
         },
     )
 

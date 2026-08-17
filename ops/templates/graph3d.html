@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LawGraphRAG 3D 그래프</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="graph-body">
+  <header class="topbar">
+    <div class="brand">
+      <h1>법령 그래프 <span class="muted">3D</span></h1>
+    </div>
+    <nav>
+      <input id="search" type="search" placeholder="법령명 검색 후 Enter" autocomplete="off">
+      <button id="reset" type="button">초기화</button>
+      <a href="/">← 모니터링</a>
+    </nav>
+  </header>
+
+  <div id="graph"></div>
+
+  <aside id="panel" class="panel hidden">
+    <button id="panel-close" type="button" class="panel-close">×</button>
+    <h2 id="panel-title">–</h2>
+    <p id="panel-sub" class="muted"></p>
+    <dl id="panel-meta"></dl>
+    <button id="panel-expand" type="button">이웃 펼치기</button>
+  </aside>
+
+  <div id="legend" class="legend"></div>
+  <div id="graph-status" class="graph-status">불러오는 중…</div>
+
+  <!-- 사내망처럼 외부 접근이 막힌 환경을 위해 이미지 빌드 시 vendor/ 로 내려받아 둔다.
+       파일이 없으면(로컬 개발 등) CDN 으로 떨어진다. -->
+  <script src="/static/vendor/3d-force-graph.min.js"
+          onerror="this.remove();
+                   var s=document.createElement('script');
+                   s.src='https://unpkg.com/3d-force-graph@1/dist/3d-force-graph.min.js';
+                   document.head.appendChild(s);"></script>
+  <script defer src="/static/graph3d.js"></script>
+</body>
+</html>

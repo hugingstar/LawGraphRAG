@@ -6,7 +6,7 @@ app/annotate.py의 구조화 출력 체인 패턴(PromptTemplate | with_structur
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import Runnable
 from langchain_google_genai import ChatGoogleGenerativeAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.config import settings
 
@@ -27,6 +27,13 @@ class ArticleReference(BaseModel):
         default=None,
         description="다른 법령을 인용한 경우 그 법령명(예: '형법'). 같은 법령 내 인용이면 비워둘 것.",
     )
+
+    @field_validator("article_no_sub", mode="before")
+    @classmethod
+    def _null_sub_to_zero(cls, value):
+        # Gemini는 가지번호가 없어도 키를 빼지 않고 null을 채워 보낸다. Field(default=0)은
+        # 키가 없을 때만 쓰이므로 여기서 직접 0으로 바꿔야 검증에서 터지지 않는다.
+        return 0 if value is None else value
 
 
 class ArticleGraphData(BaseModel):

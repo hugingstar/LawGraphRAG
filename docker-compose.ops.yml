@@ -1,0 +1,112 @@
+# 기존 docker-compose.yml 과 완전히 분리된 스택.
+#
+#   docker compose -f docker-compose.ops.yml up -d --build
+#
+# 의도적으로 지킨 것들:
+#  - 별도 compose 프로젝트 이름 → 앱 스택을 down 해도 모니터링은 계속 뜬다.
+#  - 앱 네트워크에 붙지 않고 host-gateway 로 호스트가 공개한 포트를 본다.
+#    앱 compose 프로젝트 이름이 바뀌어도 여기가 깨지지 않는다.
+#  - depends_on 없음. 감시 대상이 죽어 있을 때야말로 이게 떠 있어야 한다.
+#  - 모든 포트를 127.0.0.1 에만 바인딩. 외부에서 직접 열 수 없다.
+name: lawgraphrag-ops
+
+x-host-gateway: &host-gateway
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+services:
+  ops:
+    build:
+      context: .
+      dockerfile: Dockerfile.ops
+    restart: unless-stopped
+    env_file:
+      - path: .env.ops
+        required: false
+    ports:
+      - "127.0.0.1:8900:8900"
+    <<: *host-gateway
+    volumes:
+      - ops_data:/data
+      # 컨테이너 상태 조회용. :ro 로 붙여 읽기만 한다.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8900/healthz')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Neo4j Community 는 Prometheus 메트릭을 내보내지 않는다(Enterprise 전용).
+  # 그래서 그래프 지표는 위 ops 서비스의 /metrics 가 유일한 출처다.
+  # Postgres 는 표준 exporter 가 훨씬 상세하므로 그대로 쓴다.
+  #
+  # DATA_SOURCE_NAME 은 .env.ops 에서 온다. compose 의 ${VAR} 치환은 host 환경이나
+  # 기본 .env 파일만 자동으로 읽고 .env.ops 는 안 읽으므로, 여기선 그 방식 대신
+  # env_file 로 컨테이너 환경변수에 직접 주입한다(ops 서비스와 같은 방식).
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    restart: unless-stopped
+    env_file:
+      - path: .env.ops
+        required: false
+    <<: *host-gateway
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+    ports:
+      # 호스트 9090 은 pipeline-control-plane 이 이미 쓰고 있어 9091 로 뺐다.
+      - "127.0.0.1:9091:9090"
+    volumes:
+      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/prometheus/rules.yml:/etc/prometheus/rules.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - alertmanager
+
+  # critical 알림을 즉시 Slack 으로, warning/info 는 묶어서 보낸다.
+  # 라우팅·억제 규칙은 ops/alertmanager/alertmanager.yml. entrypoint.sh 가
+  # SLACK_WEBHOOK_URL 자리표시자를 실제 값으로 치환해서 띄운다.
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/etc/alertmanager/entrypoint.sh"]
+    env_file:
+      - path: .env.ops
+        required: false
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./ops/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./ops/alertmanager/entrypoint.sh:/etc/alertmanager/entrypoint.sh:ro
+      - alertmanager_data:/alertmanager
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    restart: unless-stopped
+    env_file:
+      - path: .env.ops
+        required: false
+    environment:
+      # localhost 바인딩이라 이미 접근이 제한돼 있다. 매번 로그인시키는 대신
+      # 조회는 익명 Viewer 로 열고, 설정 변경만 admin 로그인을 요구한다.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_DEFAULT_THEME: dark
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  ops_data:
+  prometheus_data:
+  alertmanager_data:
+  grafana_data:

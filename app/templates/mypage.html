@@ -1,0 +1,28 @@
+{% extends "_layout.html" %}
+{% block content %}
+      <div class="hero">
+        <h1>마이페이지</h1>
+        <p class="hint">지금 역할과 상관없이 <b>요청한 쪽</b>과 <b>검토한 쪽</b>의 기록을 나란히 보여줍니다.
+          왼쪽은 내가 올린 요청이 얼마나 잘 전달됐는지, 오른쪽은 내가 답한 검토가 얼마나 충실했는지 —
+          같은 100점 잣대로 스스로의 리걸 마인드를 점검해 보세요.</p>
+      </div>
+
+      {# 프로필 요약 + 종합 점수. 값은 mypage.js가 채운다. #}
+      <section class="card mypage-identity" id="mypage-identity">
+        <p class="empty-state">불러오는 중...</p>
+      </section>
+
+      <div class="mypage-split" id="mypage-split"></div>
+
+      <section class="card mypage-legend">
+        <h2 class="card-title">점수와 등급은 이렇게 계산합니다</h2>
+        <p class="hint side-note"><b>품질 점수</b>는 네 개 지표 × 25점 = 100점으로, <em>한 건을 얼마나 잘 썼는지</em>를 봅니다.
+          등수를 매기려는 숫자가 아니라 다음 요청·다음 검토에서 무엇을 한 줄 더 쓰면 좋을지 알려주는 신호입니다.
+          <b>등급</b>은 <em>최근 30일에 얼마나 했는지</em>로만 매깁니다 — 요청 측은 접수한 요청 건수(뾰족 밤송이 → 혼돈의 밤송이),
+          검토 측은 최종 결과를 남겨 답해준 검토 건수(부엉이알 → 대부엉이)입니다. 각 칸의 등급표에서 기준을 확인할 수 있습니다.
+          잔디는 최근 6개월 동안 각 측면에서 활동한 날입니다.</p>
+      </section>
+{% endblock %}
+{% block scripts %}
+  <script src="/static/mypage.js?v={{ v }}"></script>
+{% endblock %}

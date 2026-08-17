@@ -1,0 +1,170 @@
+{
+  "uid": "lawgraphrag-overview",
+  "title": "LawGraphRAG 인프라 개요",
+  "tags": ["lawgraphrag", "ops"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "editable": true,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "구성요소 상태",
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "lawgraphrag_up",
+          "legendFormat": "{{component}}",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "index": 0 }, "1": { "text": "UP", "index": 1 } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "그래프 규모",
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        { "refId": "A", "expr": "lawgraphrag_neo4j_nodes", "legendFormat": "노드", "instant": true },
+        { "refId": "B", "expr": "lawgraphrag_neo4j_relationships", "legendFormat": "관계", "instant": true }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "blue" } }, "overrides": [] }
+    },
+    {
+      "type": "stat",
+      "title": "DB 크기 / 연결",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        { "refId": "A", "expr": "lawgraphrag_pg_database_bytes", "legendFormat": "DB 크기", "instant": true },
+        { "refId": "B", "expr": "lawgraphrag_pg_connections", "legendFormat": "연결 수", "instant": true }
+      ],
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [
+        { "matcher": { "id": "byName", "options": "DB 크기" }, "properties": [ { "id": "unit", "value": "bytes" } ] }
+      ] }
+    },
+    {
+      "type": "timeseries",
+      "title": "점검 응답 시간",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        { "refId": "A", "expr": "lawgraphrag_check_latency_ms", "legendFormat": "{{component}}" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "fillOpacity": 8, "lineWidth": 1, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "그래프 라벨별 노드 수",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        { "refId": "A", "expr": "lawgraphrag_neo4j_nodes_by_label", "legendFormat": "{{label}}" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "fillOpacity": 15, "lineWidth": 1, "showPoints": "never", "stacking": { "mode": "normal" } } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Postgres 연결 (vs max_connections)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        { "refId": "A", "expr": "lawgraphrag_pg_connections", "legendFormat": "사용 중" },
+        { "refId": "B", "expr": "lawgraphrag_pg_max_connections", "legendFormat": "상한" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 8, "lineWidth": 1, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "bargauge",
+      "title": "테이블별 행 수 (추정)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        { "refId": "A", "expr": "topk(10, lawgraphrag_pg_table_rows)", "legendFormat": "{{table}}", "instant": true }
+      ],
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "continuous-BlPu" } }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "컨테이너 실행 상태",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        { "refId": "A", "expr": "lawgraphrag_container_up", "legendFormat": "{{name}}" }
+      ],
+      "fieldConfig": {
+        "defaults": { "min": 0, "max": 1, "unit": "short", "custom": { "fillOpacity": 20, "lineWidth": 1, "showPoints": "never", "drawStyle": "line", "lineInterpolation": "stepAfter" } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Postgres 캐시 적중률",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "lawgraphrag-prom" },
+      "targets": [
+        { "refId": "A", "expr": "lawgraphrag_pg_cache_hit_ratio", "legendFormat": "적중률" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1, "custom": { "fillOpacity": 10, "lineWidth": 1, "showPoints": "never" } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": false }, "tooltip": { "mode": "single" } }
+    }
+  ]
+}
