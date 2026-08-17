@@ -7,33 +7,37 @@ WebGL 이 버티지 못한다. 처음엔 Domain/Law 만 그리고, 노드를 클
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
+from ops import palette
 from ops.checks import get_neo4j_driver
 from ops.config import ops_settings as cfg
 
-# 3d-force-graph 쪽 색상과 짝을 맞춘다. 여기서만 정의하고 프론트로 내려보내
-# 팔레트가 두 군데로 갈라지지 않게 한다.
-LABEL_COLORS = {
-    "Domain": "#f2b134",
-    "Law": "#4dabf7",
-    "Article": "#69db7c",
-    "Entity": "#e599f7",
-    "Region": "#ffa94d",
-    "Incident": "#ff6b6b",
-    "Unknown": "#868e96",
-}
-
 
 def _node(node_id: str, label: str, name: str, sub: str | None = None,
-          val: float = 1.0, meta: dict[str, Any] | None = None) -> dict[str, Any]:
+          val: float = 1.0, meta: dict[str, Any] | None = None,
+          law_name: str | None = None) -> dict[str, Any]:
+    """노드 하나를 만든다.
+
+    색은 화면에서 고를 수 있는 기준마다 하나씩 미리 계산해 둔다. 프론트가 기준을
+    바꿀 때 서버를 다시 부르지 않아도 되고, 범례와 노드가 같은 정의를 쓰게 된다.
+    `heat`(인용도)는 전체를 봐야 정해지므로 overview 가 나중에 채운다.
+    """
+    group = palette.group_of(law_name if law_name is not None else (name if label == "Law" else None))
     return {
         "id": node_id,
         "label": label,
         "name": name or "(이름 없음)",
         "sub": sub,
         "val": val,
-        "color": LABEL_COLORS.get(label, LABEL_COLORS["Unknown"]),
+        "group": group,
+        "group_name": palette.GROUP_NAMES[group],
+        "heat": None,
+        "colors": {
+            "category": palette.GROUP_COLORS[group],
+            "label": palette.LABEL_COLORS.get(label, palette.LABEL_COLORS["Unknown"]),
+        },
         "meta": meta or {},
     }
 
@@ -120,6 +124,7 @@ def overview(limit: int | None = None) -> dict[str, Any]:
                         sub="분야",
                         val=6.0,
                         meta={"code": row["domain_code"]},
+                        law_name=row["domain_name"],
                     )
                 links.append(
                     {"source": domain_node_id, "target": law_node_id, "type": "CONTAINS"}
@@ -136,6 +141,7 @@ def overview(limit: int | None = None) -> dict[str, Any]:
                     sub="분야 (연결된 법령 없음)",
                     val=6.0,
                     meta={"code": row["domain_code"]},
+                    law_name=row["domain_name"],
                 ),
             )
 
@@ -155,12 +161,46 @@ def overview(limit: int | None = None) -> dict[str, Any]:
                 }
             )
 
+    _apply_citation_heat(nodes, links)
+
     return {
         "nodes": list(nodes.values()),
         "links": links,
         "truncated": truncated,
-        "legend": LABEL_COLORS,
+        "palette": palette.palette_payload(),
     }
+
+
+def _apply_citation_heat(nodes: dict[str, dict[str, Any]],
+                         links: list[dict[str, Any]]) -> None:
+    """법령이 인용망에 얼마나 얽혀 있는지를 0..1 로 눌러 노드에 심는다.
+
+    받은 인용만 세면(= 권위) 1500개 중 1027개가 0 이라 램프의 맨 아래 칸에 몰려
+    화면이 다시 단색이 된다. 주고받은 것을 함께 세면 그 수가 395개로 줄고 중간층이
+    드러난다. 여기서 색이 답하는 질문은 "누가 권위인가"가 아니라 "어디가 인용망의
+    중심인가"다.
+
+    정규화는 로그로 한다. 선형으로 하면 1163회짜리 하나가 램프를 독점한다.
+    """
+    degree: dict[str, int] = {}
+    for link in links:
+        if link["type"] != "CITES":
+            continue
+        weight = link.get("weight") or 1
+        degree[link["source"]] = degree.get(link["source"], 0) + weight
+        degree[link["target"]] = degree.get(link["target"], 0) + weight
+
+    if not degree:
+        return
+    ceiling = math.log1p(max(degree.values()))
+    if ceiling <= 0:
+        return
+
+    for node_id, node in nodes.items():
+        weight = degree.get(node_id)
+        # 0회와 '집계 없음'은 다르다. 아무와도 얽히지 않은 법령도 램프의 맨 아래
+        # 칸을 받아야 화면에서 사라지지 않는다.
+        node["heat"] = math.log1p(weight) / ceiling if weight else 0.0
 
 
 _LABEL_OF = "MATCH (n) WHERE elementId(n) = $node_id RETURN labels(n) AS labels"
@@ -288,6 +328,7 @@ def expand(node_id: str, limit: int | None = None) -> dict[str, Any]:
                     val=1.5,
                     meta={"law_id": row["law_id"], "law_name": row["law_name"],
                           "title": row.get("title")},
+                    law_name=row["law_name"],
                 )
                 links.append({"source": node_id, "target": row["id"], "type": "HAS_ARTICLE"})
 
@@ -303,6 +344,7 @@ def expand(node_id: str, limit: int | None = None) -> dict[str, Any]:
                     sub=row.get("law_name") or row.get("title"),
                     val=1.5,
                     meta={"law_id": row["law_id"], "law_name": row["law_name"]},
+                    law_name=row["law_name"],
                 )
                 links.append({"source": row["src"], "target": node_id, "type": row["rel"]})
             return _result(nodes, links, "Entity")
@@ -341,6 +383,7 @@ def _attach_article_edges(session, article_ids: list[str], nodes: dict[str, dict
                 val=1.5,
                 meta={"law_id": row["law_id"], "law_name": row["law_name"],
                       "title": row.get("title")},
+                law_name=row["law_name"],
             ),
         )
 
@@ -367,6 +410,8 @@ def _attach_article_edges(session, article_ids: list[str], nodes: dict[str, dict
 
 
 def _result(nodes, links, expanded) -> dict[str, Any]:
+    # 펼치기로 들어온 노드는 인용도를 매기지 않는다. 조각 안에서 센 인용 횟수는
+    # 전체 순위와 뜻이 달라서, 같은 램프에 얹으면 색이 거짓말을 한다.
     return {"nodes": list(nodes.values()), "links": links, "expanded": expanded}
 
 
@@ -380,7 +425,22 @@ LIMIT 30
 
 
 def search_laws(query: str) -> list[dict[str, Any]]:
+    """검색 결과마다 바로 심을 수 있는 노드를 함께 돌려준다.
+
+    개요 상한에 걸려 화면에 없던 법령이 검색으로 걸릴 수 있다. 그때 프론트가 노드를
+    직접 만들면 색 계산이 그쪽으로 새므로, 서버가 만든 것을 그대로 쓰게 한다.
+    """
     if not query.strip():
         return []
     with get_neo4j_driver().session() as session:
-        return session.run(_SEARCH, q=query.strip()).data()
+        rows = session.run(_SEARCH, q=query.strip()).data()
+
+    for row in rows:
+        count = row["article_count"] or 0
+        row["node"] = _node(
+            row["id"], "Law", row["law_name"] or row["law_id"],
+            sub=f"조문 {count}개",
+            val=1.0 + min(count, 500) ** 0.5,
+            meta={"law_id": row["law_id"], "article_count": count},
+        )
+    return rows

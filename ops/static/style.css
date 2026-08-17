@@ -39,13 +39,19 @@ h2 { font-size: 15px; margin: 0 0 4px; font-weight: 600; }
 .topbar nav a { color: var(--muted); text-decoration: none; font-size: 13px; }
 .topbar nav a:hover { color: var(--accent); }
 
-button, input[type="search"] {
+button, input[type="search"], select {
   background: var(--panel-2); color: var(--text);
   border: 1px solid var(--border); border-radius: 6px;
   padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer;
 }
-button:hover { border-color: var(--accent); }
+button:hover, select:hover { border-color: var(--accent); }
 input[type="search"] { cursor: text; min-width: 200px; }
+
+.field {
+  display: flex; align-items: center; gap: 6px;
+  color: var(--muted); font-size: 12px;
+}
+.field select { padding: 5px 8px; }
 
 .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; flex: none; }
 .dot-ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
@@ -113,12 +119,24 @@ table.mini td:last-child, table.mini th:last-child { text-align: right; }
 
 .legend {
   position: fixed; left: 16px; bottom: 16px;
-  display: flex; gap: 14px; flex-wrap: wrap;
+  display: flex; gap: 6px; flex-wrap: wrap; max-width: calc(100vw - 260px);
   background: rgba(22, 27, 34, .9); border: 1px solid var(--border);
-  border-radius: 8px; padding: 8px 12px; font-size: 12px;
+  border-radius: 8px; padding: 6px 8px; font-size: 12px;
 }
-.legend span { display: flex; align-items: center; gap: 6px; }
-.legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+/* 범례 칸은 누르면 그 묶음만 남긴다. 색만으로 구분하기 어려운 경우의 도피처이자,
+   1500개가 겹친 구름에서 한 분야만 떼어 보는 수단이다. */
+.legend-item {
+  display: flex; align-items: center; gap: 6px;
+  background: none; border: 1px solid transparent; border-radius: 6px;
+  padding: 3px 8px; font-size: 12px; color: var(--text);
+}
+.legend-item:hover:not(:disabled) { background: var(--panel-2); border-color: var(--border); }
+.legend-item:disabled { cursor: default; }
+.legend-item.off { color: var(--muted); }
+.legend-item.off i { opacity: .3; }
+.legend-item b { color: var(--muted); font: 11px var(--mono); font-weight: 400; }
+.legend i, .swatch { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+.swatch { margin-right: 6px; vertical-align: baseline; }
 
 .graph-status {
   position: fixed; right: 16px; bottom: 16px;

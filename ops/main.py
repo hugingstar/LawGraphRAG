@@ -24,6 +24,20 @@ BASE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
+def _static_version() -> str:
+    """정적 파일에 붙일 지문.
+
+    이미지를 새로 굽고 컨테이너를 올려도 브라우저가 예전 CSS/JS 를 그대로 쓰는 일이
+    있다. StaticFiles 는 Cache-Control 을 달지 않아 브라우저가 임의로 캐시를 오래
+    잡아도 되기 때문이다. 파일 수정 시각을 쿼리로 붙여 URL 자체를 바꾼다.
+    """
+    stamps = [p.stat().st_mtime for p in (BASE_DIR / "static").rglob("*") if p.is_file()]
+    return str(int(max(stamps))) if stamps else "0"
+
+
+STATIC_VERSION = _static_version()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 첫 화면이 비어 있지 않도록 한 사이클 먼저 돌린다. 실패해도 폴러는 계속 돈다.
@@ -55,12 +69,16 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    return templates.TemplateResponse(request, "index.html", {"poll_interval": cfg.poll_interval_seconds})
+    return templates.TemplateResponse(
+        request,
+        "index.html",
+        {"poll_interval": cfg.poll_interval_seconds, "static_version": STATIC_VERSION},
+    )
 
 
 @app.get("/graph", response_class=HTMLResponse)
 async def graph_page(request: Request):
-    return templates.TemplateResponse(request, "graph3d.html", {})
+    return templates.TemplateResponse(request, "graph3d.html", {"static_version": STATIC_VERSION})
 
 
 # --------------------------------------------------------------------------

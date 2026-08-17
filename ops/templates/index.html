@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>LawGraphRAG Ops</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
 </head>
 <body>
   <header class="topbar">
@@ -34,6 +34,6 @@
   </main>
 
   <script>window.OPS_POLL_INTERVAL = {{ poll_interval }};</script>
-  <script src="/static/ops.js"></script>
+  <script src="/static/ops.js?v={{ static_version }}"></script>
 </body>
 </html>

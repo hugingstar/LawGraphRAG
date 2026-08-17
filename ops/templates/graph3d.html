@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>LawGraphRAG 3D 그래프</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ static_version }}">
 </head>
 <body class="graph-body">
   <header class="topbar">
@@ -13,7 +13,15 @@
     </div>
     <nav>
       <input id="search" type="search" placeholder="법령명 검색 후 Enter" autocomplete="off">
+      <label class="field">색 기준
+        <select id="color-mode">
+          <option value="category">분야</option>
+          <option value="label">노드 종류</option>
+          <option value="heat">인용 연결</option>
+        </select>
+      </label>
       <button id="reset" type="button">초기화</button>
+      <button id="screenshot" type="button">📷 스크린샷</button>
       <a href="/">← 모니터링</a>
     </nav>
   </header>
@@ -38,6 +46,6 @@
                    var s=document.createElement('script');
                    s.src='https://unpkg.com/3d-force-graph@1/dist/3d-force-graph.min.js';
                    document.head.appendChild(s);"></script>
-  <script defer src="/static/graph3d.js"></script>
+  <script defer src="/static/graph3d.js?v={{ static_version }}"></script>
 </body>
 </html>
