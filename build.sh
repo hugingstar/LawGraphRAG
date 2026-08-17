@@ -48,6 +48,23 @@ if grep -q "GEMINI_API_KEY=your_gemini_api_key_here" .env; then
     echo ""
 fi
 
+if grep -q "SLACK_WEBHOOK_URL=your_slack_webhook_url_here" .env.ops || grep -q "^SLACK_WEBHOOK_URL=$" .env.ops; then
+    echo ""
+    echo "🚨 [Optional] Slack Webhook URL for monitoring alerts is missing."
+    echo "  If you want to receive critical alerts via Slack, enter your Incoming Webhook URL."
+    echo "  (Press Enter to skip and disable Slack notifications)"
+    read -p "  Enter your SLACK_WEBHOOK_URL: " user_slack_url
+    if [ ! -z "$user_slack_url" ]; then
+        # Replace the URL (handle slashes safely by using | as sed delimiter)
+        sed "s|SLACK_WEBHOOK_URL=.*|SLACK_WEBHOOK_URL=$user_slack_url|" .env.ops > .env.ops.tmp && mv .env.ops.tmp .env.ops
+        echo "  ✅ SLACK_WEBHOOK_URL saved."
+    else
+        sed "s|SLACK_WEBHOOK_URL=.*|SLACK_WEBHOOK_URL=|" .env.ops > .env.ops.tmp && mv .env.ops.tmp .env.ops
+        echo "  ℹ️ Skipped: Slack alerts disabled."
+    fi
+    echo ""
+fi
+
 # Check for reset flag
 RESET_DATA=false
 if [ "$1" == "--reset-data" ]; then
