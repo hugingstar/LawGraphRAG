@@ -1,3 +1,21 @@
+# 개발/빌드용 스택. 다른 컴퓨터에서 Docker Hub 이미지로 띄울 때는
+# docker-compose.hub.yml 을 쓴다.
+#
+# 포트 정책: 밖으로 여는 것은 nginx 80 하나뿐이다. api/db/neo4j 는 127.0.0.1 에만
+# 붙어서 VM 자신 말고는 아무도 못 두드린다 — 호스트 PC 는 http://VM_IP 로 nginx 를 거쳐야만
+# 들어올 수 있다. 모니터링(ops) 스택은 host-gateway 대신 이 compose 가 만드는
+# lawgraphrag_default 네트워크에 직접 붙어 컨테이너 이름(api/db/neo4j)으로 본다
+# (docker-compose.ops.yml 참고) — 그래서 여기를 닫아도 모니터링은 죽지 않는다.
+#
+# GPU 예약은 일부러 여기 넣지 않았다. NVIDIA 런타임이 없는 호스트(Rocky VM 등)에서는
+# device 예약 자체가 컨테이너 생성 단계에서 실패해서 앱이 CPU 로라도 못 뜬다.
+# GPU 가 있으면 오버레이를 겹친다(build.sh 가 자동으로 판단한다):
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+#
+# 프로젝트 이름을 못박아 둔다. ops 스택이 컨테이너 이름(lawgraphrag-api-1)으로
+# 앱 액세스 로그를 읽기 때문에, 디렉터리 이름이 바뀌어도 깨지면 안 된다.
+name: lawgraphrag
+
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -7,10 +25,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro,z
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 5s
@@ -23,8 +41,8 @@ services:
     environment:
       NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     volumes:
       - neo4j_data:/data
     healthcheck:
@@ -34,7 +52,13 @@ services:
       retries: 20
 
   api:
-    build: .
+    # Docker Hub 로 push 할 때 쓰는 이름. TORCH_VARIANT 와 태그를 같이 움직인다.
+    #   TORCH_VARIANT=cpu API_TAG=cpu docker compose build api
+    image: yslee4050/lawgraphrag-api:${API_TAG:-cuda}
+    build:
+      context: .
+      args:
+        TORCH_VARIANT: ${TORCH_VARIANT:-cuda}
     restart: unless-stopped
     env_file: .env
     environment:
@@ -42,7 +66,7 @@ services:
       POSTGRES_PORT: 5432
       NEO4J_URI: bolt://neo4j:7687
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -50,19 +74,29 @@ services:
         condition: service_healthy
     volumes:
       - hf_cache:/root/.cache/huggingface
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
+
+  # 외부에서 들어오는 유일한 진입점. 호스트 PC 는 http://VM_IP 로 여기에 붙는다.
+  # api 를 직접 노출하지 않고 여기를 거치게 해 두면, 밖에 열어야 할 포트가 하나로 줄어든다.
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro,z
+    depends_on:
+      - api
 
 volumes:
+  # external: true 를 쓰면 볼륨이 미리 없는 호스트(갓 만든 Rocky VM 등)에서
+  # "external volume not found" 로 up 이 즉시 실패한다. 이름만 지정하면 있으면 재사용하고
+  # 없으면 만들어 주므로, 새 호스트와 기존 호스트가 같은 파일로 동작한다.
+  #
+  # 이 PC 처럼 예전 이름의 볼륨에 데이터가 들어 있으면 .env 에서 이름을 덮어쓴다:
+  #   DB_VOLUME=safetylawadvisor_db_data
+  #   HF_VOLUME=safetylawadvisor_hf_cache
   db_data:
-    external: true
-    name: safetylawadvisor_db_data
+    name: ${DB_VOLUME:-lawgraphrag_db_data}
   hf_cache:
-    external: true
-    name: safetylawadvisor_hf_cache
+    name: ${HF_VOLUME:-lawgraphrag_hf_cache}
   neo4j_data:

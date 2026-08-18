@@ -87,6 +87,13 @@ async def auth_exception_handler(request: Request, exc: StarletteHTTPException):
     return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
 
+@app.get("/healthz")
+def healthz():
+    """컨테이너 헬스체크 전용. 인증을 타지 않아야 하고(로그인 리다이렉트가 끼면
+    healthcheck 가 무의미해진다) DB 도 건드리지 않는다 — 프로세스가 살아 있는지만 본다."""
+    return {"status": "ok"}
+
+
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)

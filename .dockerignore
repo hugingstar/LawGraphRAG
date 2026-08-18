@@ -1,0 +1,32 @@
+# 빌드 컨텍스트에서 빼는 것들. venv/ 와 .git/ 만으로도 수 GB 라서, 이게 없으면
+# 빌드가 시작되기도 전에 컨텍스트 전송에서 몇 분을 버린다.
+venv/
+.venv/
+.git/
+.gitignore
+.github/
+
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# 비밀값은 이미지에 절대 굽지 않는다. 런타임에 env_file 로만 주입한다.
+.env
+.env.ops
+
+# 런타임에 안 쓰는 것들. 설정 파일(db/init.sql, ops/prometheus/*)은 이미지가 아니라
+# compose 의 bind mount 로 들어가므로 여기서 빼도 된다.
+tests/
+Data/
+db/
+docker-compose*.yml
+Dockerfile*
+*.md
+build.sh
+push.sh
+deploy.sh
+
+# Dockerfile.ops 가 빌드 중에 직접 내려받는다. 호스트 사본을 밀어 넣지 않는다.
+ops/static/vendor/

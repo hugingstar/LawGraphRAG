@@ -1,0 +1,88 @@
+# 배포용 스택 — 빌드하지 않고 Docker Hub 에서 이미지를 pull 해서 띄운다.
+#
+#   git clone https://github.com/hugingstar/LawGraphRAG.git
+#   cd LawGraphRAG && cp .env.example .env      # 값 채우기
+#   docker compose -f docker-compose.hub.yml pull
+#   docker compose -f docker-compose.hub.yml up -d
+#
+# docker-compose.yml(개발용)과 일부러 다른 점:
+#  - build: 없음. 대상 PC 에서 9GB 짜리를 다시 빌드하지 않는다.
+#  - 볼륨이 external 이 아니다. 개발 PC 의 safetylawadvisor_* 볼륨은 그 PC 에만
+#    있으므로, 그대로 두면 새 PC 에서 "external volume not found" 로 즉시 죽는다.
+#  - GPU 예약 없음. NVIDIA 런타임이 없는 PC 에서 컨테이너가 아예 안 뜬다.
+#    GPU 가 있으면 docker-compose.gpu.yml 을 겹쳐 쓴다(아래 참고).
+#
+# GPU 가 있는 PC:
+#   API_TAG=cuda docker compose -f docker-compose.hub.yml -f docker-compose.gpu.yml up -d
+name: lawgraphrag
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro,z
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  neo4j:
+    image: neo4j:5-community
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
+    ports:
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    # 기본은 cpu. 어느 PC 에서도 뜨는 쪽을 기본값으로 둔다.
+    image: yslee4050/lawgraphrag-api:${API_TAG:-cpu}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      NEO4J_URI: bolt://neo4j:7687
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    volumes:
+      # 임베딩(약 2.2GB) + 재순위(약 2.3GB) 모델을 첫 질의 때 내려받아 여기 캐시한다.
+      # 이 볼륨이 없으면 컨테이너를 다시 만들 때마다 5GB 를 다시 받는다.
+      - hf_cache:/root/.cache/huggingface
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro,z
+    depends_on:
+      - api
+
+volumes:
+  db_data:
+  hf_cache:
+  neo4j_data:

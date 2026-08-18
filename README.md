@@ -1,18 +1,303 @@
 # Law Owly (법 부엉이)
 
-## 🚀 빠른 시작 (Quick Start)
+## 🚀 빠른 시작 — Rocky Linux VM
 
-방금 생성한 `build.sh` 스크립트를 사용하여 모든 서비스(메인 앱 및 모니터링)를 한 번에 빌드하고 실행할 수 있습니다.
+클론하고 `deploy.sh` 하나만 실행하면 된다(Windows 는 `deploy.bat` 더블클릭 또는 `deploy.ps1`).
+아래는 갓 설치한 Rocky Linux 9 VM 기준이다.
+
+### 스크립트 한눈에 보기
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 40, "rankSpacing": 55}}}%%
+flowchart LR
+    subgraph Entry ["실행 진입점"]
+        Sh["deploy.sh<br/>Linux · macOS · Rocky VM"]
+        Bat["deploy.bat<br/>Windows, 더블클릭"]
+        Ps1["deploy.ps1<br/>Windows, PowerShell"]
+    end
+    Bat -->|"-ExecutionPolicy Bypass 로 호출"| Ps1
+
+    Sh --> Mode{"--hub / -Hub<br/>플래그 있음?"}
+    Ps1 --> Mode
+    Mode -->|"없음 (기본)"| Build["소스 빌드<br/>docker-compose.yml [+ gpu.yml]"]
+    Mode -->|"있음"| Pull["Docker Hub pull<br/>docker-compose.hub.yml [+ gpu.yml]"]
+
+    Build --> AppStack["앱 스택<br/>nginx · api · db · neo4j"]
+    Pull --> AppStack
+    AppStack -->|"--no-ops 아니면"| OpsBuild["ops 스택<br/>docker-compose.ops.yml (빌드)<br/>또는 .ops.hub.yml (pull)"]
+
+    Push["docker-push.ps1<br/>(배포판을 만드는 쪽만 실행)"] -.->|"cpu · cuda · ops 이미지 빌드 후 push"| Hub[("Docker Hub<br/>yslee4050/lawgraphrag-*")]
+    Hub -.->|pull| Pull
+```
+
+`deploy.bat`/`deploy.ps1`은 같은 파일 하나를 부르는 두 진입점이다(더블클릭 vs 터미널). `docker-push.ps1`
+은 이 이미지를 Hub 에 새로 올리는 쪽만 쓰고, 그냥 받아서 띄우기만 할 사람은 볼 일이 없다.
+
+### 1) Docker 설치
+
+Rocky 는 Docker 를 기본 제공하지 않으므로 공식 저장소를 추가한다.
 
 ```bash
-# 실행 권한 부여
-chmod +x build.sh
-
-# 전체 빌드 및 백그라운드 실행
-./build.sh
+sudo dnf -y install dnf-plugins-core git
+sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+sudo dnf -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+sudo systemctl enable --now docker
 ```
-- 메인 앱 접속: [http://localhost:8000](http://localhost:8000)
-- 모니터링 대시보드 (Grafana): [http://localhost:3000](http://localhost:3000)
+
+`sudo` 없이 docker 를 쓰려면 현재 사용자를 docker 그룹에 넣는다. **그룹 변경은 다시 로그인해야 적용된다.**
+
+```bash
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+확인:
+
+```bash
+docker version && docker compose version
+```
+
+### 2) 클론
+
+```bash
+git clone https://github.com/hugingstar/LawGraphRAG.git
+cd LawGraphRAG
+```
+
+### 3) 빌드 및 실행
+
+```bash
+chmod +x deploy.sh
+./deploy.sh
+```
+
+Windows 호스트 PC 라면 `deploy.bat` 을 더블클릭하거나 PowerShell 에서 `.\deploy.ps1` 을 직접
+실행한다. 옵션 이름만 `-Hub`, `-ResetData` 처럼 PascalCase 로 다를 뿐 순서·동작은 완전히 같다.
+(관리자 권한 없이 실행해도 되지만, 그 경우 방화벽 규칙만 자동으로 못 열고 안내만 나온다.)
+
+`deploy.sh` 가 하는 일:
+
+1. Docker 데몬 접속·권한·compose 플러그인을 먼저 점검하고, 문제가 있으면 해결 명령을 알려주고 멈춘다.
+2. NVIDIA 런타임 유무를 보고 **어떤 이미지를 쓸지 스스로 정한다.** GPU 가 없으면 CPU 이미지(약 2.3GB), 있으면 CUDA 이미지(약 8.8GB)를 쓰고 GPU 오버레이를 붙인다. VM 은 대개 GPU 가 없으므로 CPU 쪽이다 — 기능은 같고 임베딩·재순위만 느리다.
+3. `.env` / `.env.ops` 가 없으면 예제에서 만들고, 비어 있는 API 키를 그 자리에서 물어본다.
+4. firewalld 가 켜져 있으면 아래 포트를 연다.
+5. 앱 스택과 모니터링 스택을 각각 (기본은 빌드, `--hub` 를 주면 pull 해서) 띄운다.
+
+주요 옵션(`deploy.ps1` 은 `-Hub`, `-ResetData` 처럼 PascalCase 로 대응):
+
+| 옵션 | 설명 |
+|---|---|
+| `--hub` | 빌드하지 않고 Docker Hub 에 미리 올려둔 이미지를 pull 해서 띄운다(아래 "Docker Hub 이미지로 띄우기" 참고) |
+| `--reset-data` | 볼륨까지 지우고 처음부터 (수집한 법령·그래프가 사라진다) |
+| `--no-firewall` | 방화벽 개방을 건너뛴다 |
+| `--no-ops` | 모니터링 스택 없이 앱만 띄운다 |
+
+### 4) 방화벽
+
+`deploy.sh` 가 firewalld 에 아래를 자동으로 등록한다. 수동으로 하려면:
+
+```bash
+sudo firewall-cmd --permanent --add-port=80/tcp
+sudo firewall-cmd --reload
+```
+
+| 포트 | 서비스 | 바인딩 | 방화벽 | 호스트 PC 에서 |
+|---|---|---|---|---|
+| **80** | **nginx** | `0.0.0.0` | **연다** | **`http://VM_IP` — 유일한 진입점** |
+| 8000 | api (FastAPI) | `127.0.0.1` | 불필요 | **닿지 않음** — VM 안에서만 |
+| 5433 | Postgres | `127.0.0.1` | 불필요 | **닿지 않음** |
+| 7474 / 7687 | Neo4j | `127.0.0.1` | 불필요 | **닿지 않음** |
+| 8900 | 운영 대시보드 | `127.0.0.1` | 불필요 | SSH 터널 |
+| 3001 | Grafana (컨테이너 3000) | `127.0.0.1` | 불필요 | SSH 터널 |
+| 9091 | Prometheus (컨테이너 9090) | `127.0.0.1` | 불필요 | SSH 터널 |
+| 9093 | Alertmanager | `127.0.0.1` | 불필요 | SSH 터널 |
+| — | postgres-exporter (9187) | 공개 안 함 | — | Prometheus 가 내부 네트워크로 직접 수집 |
+
+**nginx 80 을 거쳐야만 밖에서 조회된다.** api·db·neo4j 는 `127.0.0.1` 에만 묶여서 VM 자기 자신 말고는 아무도 못 두드린다 — iptables DNAT 규칙 자체가 목적지 주소를 `127.0.0.1` 로 제한하기 때문에, LAN 에서 VM 의 실제 IP 로 아무리 찔러도 애초에 매치되는 규칙이 없다. 예전엔 이 포트들이 `0.0.0.0` 이었는데, 모니터링(ops) 스택이 `host.docker.internal` 로 호스트가 공개한 포트를 보는 방식에 기대고 있었기 때문이다. 지금은 ops 가 앱의 Docker 네트워크에 직접 붙어 컨테이너 이름(`api`/`db`/`neo4j`)으로 보므로, 호스트 포트를 막아도 모니터링은 그대로 동작한다(`4-1)` 참고).
+
+Grafana 3000→3001, Prometheus 9090→9091 로 어긋난 것은 의도한 것이다. 호스트의 9090 을 다른 도구가 쓰고 있어서 비켜 두었다.
+
+다른 포트를 더 열고 싶으면(예: Neo4j 브라우저를 외부에도 노출):
+
+```bash
+FIREWALL_PORTS="80 7474 7687" ./deploy.sh
+```
+
+모니터링 화면은 방화벽을 여는 대신 SSH 터널로 본다. 외부에 직접 노출하지 않으려고 일부러 이렇게 묶어 두었다.
+
+```bash
+ssh -L 8900:localhost:8900 -L 3001:localhost:3001 사용자@VM주소
+```
+
+클라우드 VM(AWS·GCP 등)이라면 firewalld 와 별개로 **보안 그룹에서도 8000 을 열어야** 한다.
+
+### 4-1) 호스트 PC 에서 VM 의 IP 로 접속하기
+
+VM 이 자기 IP 를 가지고 있고, 호스트 PC 에서 그 IP 로 바로 들어가는 구성이다.
+
+```
+호스트 PC 브라우저
+   │  http://192.168.0.42        ← VM 의 IP, 포트는 80 이라 생략됨
+   ▼
+Rocky VM :80  ── firewalld 에서 80/tcp 허용
+   │
+   ▼
+Docker nginx 컨테이너 :80
+   │  proxy_pass http://api:8000   (compose 내부 네트워크 — 컨테이너 이름으로 통신)
+   ▼
+api 컨테이너 :8000
+```
+
+**밖에서 조회되는 것은 nginx 80 뿐이다.** api(8000)·db(5433)·neo4j(7474/7687) 는 `127.0.0.1` 에만
+바인딩돼 있어서, VM 의 실제 IP 로는 아예 닿지 않는다 — iptables 의 DNAT 규칙이 목적지 주소를
+`127.0.0.1` 로 제한하기 때문에, LAN 에서 오는 패킷은 애초에 이 규칙에 매치될 수 없다(포트를
+스캔해도 "닫힘"이 아니라 "그 규칙 자체가 없음"이다). `docker-compose.yml` 의 "포트 정책" 주석
+참고.
+
+#### VM IP 확인
+
+```bash
+hostname -I
+ip -4 addr show
+```
+
+DHCP 로 받은 IP 는 재부팅하면 바뀔 수 있다. 계속 쓸 주소라면 고정하는 편이 낫다.
+
+```bash
+nmcli con mod "System eth0" ipv4.method manual ipv4.addresses 192.168.0.42/24 ipv4.gateway 192.168.0.1 ipv4.dns 8.8.8.8
+nmcli con up "System eth0"
+```
+
+#### VM 네트워크 어댑터 모드
+
+| 모드 | VM IP | 누가 접속 가능한가 |
+|---|---|---|
+| 브리지(Bridged) | 공유기가 주는 LAN IP (예: `192.168.0.42`) | 호스트 PC + 같은 네트워크의 모든 장비 |
+| 호스트 전용(Host-only) | 전용 대역 (예: `192.168.56.101`) | 호스트 PC 만 |
+| NAT | `10.0.2.15` 같은 내부 주소 | 아무도 — 포트포워딩이 따로 필요하다 |
+
+VM IP 로 바로 접속된다면 브리지 또는 호스트 전용이다. 브리지 모드라면 VM 이 사내망/LAN 에 그대로
+물려 있다는 뜻이므로, 아래 확인을 한 번은 해 보는 것을 권한다.
+
+#### 방화벽
+
+`deploy.sh` 가 80/tcp 만 연다.
+
+```bash
+sudo firewall-cmd --permanent --add-port=80/tcp && sudo firewall-cmd --reload
+```
+
+#### 접속 확인
+
+VM 안에서:
+
+```bash
+curl -I http://localhost/healthz
+```
+
+호스트 PC(Windows PowerShell)에서:
+
+```powershell
+Test-NetConnection 192.168.0.42 -Port 80
+```
+
+브라우저로 `http://192.168.0.42` 를 열어 로그인 화면이 나오면 전 구간이 이어진 것이다.
+
+#### 확인 — 80 말고는 정말 안 닿는지
+
+의심스러우면 직접 찔러서 확인한다.
+
+```powershell
+8000,5433,7474,7687 | ForEach-Object { Test-NetConnection 192.168.0.42 -Port $_ }
+```
+
+전부 `TcpTestSucceeded : False` 가 나와야 정상이다. `True` 가 나오는 게 있다면 `docker-compose.yml`
+을 수정한 뒤 이미지를 새로 받았는지(`git pull` 후 `./deploy.sh`) 확인한다 — 예전 버전은 이 포트들이
+`0.0.0.0` 이었다.
+
+#### 모니터링(ops)이 계속 도는 이유
+
+api/db/neo4j 를 막았는데도 운영 대시보드(8900)는 정상 동작해야 한다. 예전엔 ops 가
+`host.docker.internal` 로 "호스트가 공개한 포트"를 봤지만(그래서 포트를 막으면 대시보드가
+전부 빨간색이 됐다), 지금은 `docker-compose.ops.yml` 이 앱의 Docker 네트워크(`lawgraphrag_default`)
+에 외부 네트워크로 직접 붙어서 컨테이너 이름(`api`/`db`/`neo4j`)으로 본다. 호스트 포트를
+어떻게 막든 컨테이너 간 통신은 영향받지 않는다.
+
+이 방식의 트레이드오프는 하나다 — **ops 는 앱 스택이 한 번은 떠 있어야 시작된다**(네트워크가
+없으면 `network lawgraphrag_default not found` 로 실패한다). `deploy.sh` 는 항상 앱을 먼저
+띄우므로 문제되지 않는다. ops 만 따로 재시작할 때도 앱이 이미 떠 있으면(`docker compose down`
+으로 내리지 않은 이상 네트워크는 컨테이너를 멈춰도 남아 있다) 그대로 된다.
+
+Neo4j 브라우저를 밖에서 직접 쓰고 싶은 등 특정 서비스를 예외적으로 열어야 하면
+`docker-compose.yml` 에서 해당 포트의 `127.0.0.1` 을 `0.0.0.0` 으로 바꾸고 방화벽을 추가로 연다.
+그 포트만 다시 노출되는 것이므로 신중하게 판단할 것.
+
+### 5) 법령 데이터 수집
+
+DB 는 빈 상태로 뜬다. 법령 데이터는 이미지에 들어 있지 않으므로 한 번 수집해야 한다. 시간이 가장 오래 걸리는 단계다.
+
+```bash
+docker compose exec api python -m app.ingest --all
+```
+
+### 6) 접속
+
+- 앱: `http://VM주소:8000`
+- Neo4j 브라우저: `http://VM주소:7474`
+- 운영 대시보드 / Grafana: SSH 터널 후 `http://localhost:8900`, `http://localhost:3001`
+
+### 막히면 볼 것
+
+| 증상 | 원인과 해결 |
+|---|---|
+| `permission denied ... docker.sock` | docker 그룹 반영 안 됨. `sudo usermod -aG docker $USER` 후 재로그인 또는 `newgrp docker` |
+| `Cannot connect to the Docker daemon` | `sudo systemctl enable --now docker` |
+| 컨테이너가 설정 파일을 못 읽음 | SELinux Enforcing. compose 의 bind mount 에 `:z` 를 이미 붙여 두었으니, 그래도 막히면 `sudo ausearch -m avc -ts recent` 로 확인 |
+| 밖에서 80 접속 불가 | firewalld 개방 여부와 클라우드 보안 그룹을 함께 확인 |
+| `ops` 스택이 `network lawgraphrag_default not found` 로 안 뜸 | 앱 스택을 한 번도 안 띄웠거나 `docker compose -f docker-compose.yml down` 으로 네트워크까지 지웠다. 앱을 먼저 띄운다(`deploy.sh` 는 항상 이 순서를 지킨다) |
+| 운영 대시보드에서 앱·DB·Neo4j 가 빨간색 | ops 가 앱의 Docker 네트워크에 붙어 컨테이너 이름으로 보는데, 그 네트워크에 실제로 붙었는지 확인: `docker inspect lawgraphrag-ops-ops-1 --format '{{json .NetworkSettings.Networks}}'` 에 `lawgraphrag_default` 가 있어야 한다 |
+| 첫 조문 분석이 매우 느림 | 임베딩(약 2.2GB)·재순위(약 2.3GB) 모델을 처음 한 번 내려받는다. `hf_cache` 볼륨에 캐시되므로 이후엔 없다. 끄려면 `.env` 에 `RERANK_ENABLED=false` |
+| 빌드가 디스크 부족으로 실패 | CPU 이미지 약 2.3GB + 모델 캐시 약 5GB + 법령 데이터. 여유 30GB 이상 권장 |
+
+## 🐳 Docker Hub 이미지로 띄우기 (빌드 없이)
+
+`deploy.sh`/`deploy.ps1` 은 기본으로 소스를 빌드하지만, `--hub`(PowerShell 은 `-Hub`) 를 주면
+빌드를 건너뛰고 미리 올려둔 이미지를 pull 만 해서 띄운다. 나머지 흐름(환경변수, 방화벽, GPU
+자동 감지, 순서)은 완전히 같다 — 뭘 쓸지 모르겠으면 옵션 없이(빌드) 실행하면 된다.
+
+| 이미지 | 크기 | 용도 |
+|---|---|---|
+| `yslee4050/lawgraphrag-api:cpu` (= `:latest`) | 약 2.3GB | GPU 없는 호스트. VM 은 대개 이쪽 |
+| `yslee4050/lawgraphrag-api:cuda` | 약 8.8GB | NVIDIA GPU + Docker GPU 런타임이 있는 호스트 |
+| `yslee4050/lawgraphrag-ops:latest` | 약 300MB | 모니터링 스택 |
+
+Prometheus·Grafana 설정과 `db/init.sql` 은 이미지가 아니라 bind mount 로 들어가므로, 이 방식도 저장소 클론은 필요하다.
+
+```bash
+git clone https://github.com/hugingstar/LawGraphRAG.git
+cd LawGraphRAG
+./deploy.sh --hub            # Windows: .\deploy.ps1 -Hub  또는 deploy.bat -Hub
+```
+
+`--hub` 는 `docker-compose.hub.yml` 을 쓴다. 기본 빌드 경로(`docker-compose.yml`)와 달리 이 PC 에서
+이미지를 다시 빌드하지 않고, 볼륨도 새로 만들며, 앞단에 nginx 를 둔다(80 포트). GPU 유무는
+빌드할 때와 똑같이 자동 감지해서 `:cpu`/`:cuda` 태그를 고른다. 80 이 이미 쓰이고 있으면
+`.env` 에 `NGINX_PORT=8080` 처럼 포트를 바꾸거나 `:8000` 을 직접 쓰면 된다.
+
+### 이미지를 Hub 에 새로 올리기 (배포판을 만드는 쪽만)
+
+위 `--hub` 로 받는 이미지 자체를 갱신하려면, 빌드 PC 에서 딱 한 번:
+
+```bash
+docker login
+```
+
+```powershell
+.\docker-push.ps1
+```
+
+`docker-push.ps1` 은 cpu/cuda/ops 세 이미지를 전부 빌드해서 Docker Hub 에 올린다. 이 저장소를
+그냥 받아서 `deploy.sh --hub` 로 띄우기만 할 사람은 이 스크립트를 쓸 일이 없다.
 
 ---
 
@@ -452,7 +737,7 @@ flowchart TD
         Sock[("/var/run/docker.sock<br/>읽기 전용 마운트")]
     end
 
-    AppAPI -.->|"host.docker.internal 로<br/>호스트 공개 포트만 조회"| OpsSvc
+    AppAPI -.->|"app 네트워크에 직접 붙어<br/>컨테이너 이름(api)으로 조회"| OpsSvc
     AppDB -.->|"전용 읽기 전용 계정<br/>(lawowly_ro: SELECT + pg_monitor만)"| OpsSvc
     AppDB -->|"DATA_SOURCE_NAME<br/>(읽기 전용 계정)"| PgExporter
     AppNeo4j -.->|"전용 계정, 자격증명만 분리<br/>(Community는 진짜 RBAC 불가)"| OpsSvc
@@ -475,51 +760,44 @@ flowchart TD
 
 ## 준비물
 
-1. Docker / Docker Compose
-2. **NVIDIA GPU 및 최신 그래픽 드라이버** (선택이지만, 수많은 조문을 임베딩하는 과정의 속도 향상을 위해 강력히 권장됩니다. Docker에서 GPU를 자동으로 사용하도록 설정되어 있습니다.)
+1. Docker / Docker Compose (`deploy.sh`/`deploy.ps1`이 없으면 설치 명령까지 안내한다)
+2. **NVIDIA GPU 및 최신 그래픽 드라이버** — 선택이며, 있으면 자동 감지해서 CUDA 이미지를 쓴다(임베딩·재순위가 빨라진다). 없어도 CPU 이미지로 기능은 동일하게 동작한다.
 3. 법제처 Open API OC 키: https://open.law.go.kr 에서 회원가입 후 발급
 4. Gemini API 키: https://aistudio.google.com/apikey (그래프 추출·인용 판정 모두 이 키를 사용하며, 무료 티어는 분당/일일 호출 횟수 제한이 있습니다)
 
-## 설정
+`.env` 생성과 위 키 입력은 위 "빠른 시작"의 `deploy.sh`/`deploy.ps1`이 자동으로 처리한다(없으면
+`.env.example`에서 만들고 빈 값을 그 자리에서 물어본다). 스크립트 없이 수동으로 하려면:
 
 ```bash
 cp .env.example .env
 # .env에 LAW_OC_KEY, GEMINI_API_KEY 채워넣기
-# Neo4j 접속 정보(NEO4J_URI/NEO4J_USER/NEO4J_PASSWORD)는 기본값 그대로 써도 되고, 필요하면 변경
 ```
 
-## 실행
+## 법령 데이터 수집 및 그래프 구축
 
-아래 명령어들은 Docker를 이용해 우리 시스템을 격리된 환경에서 안전하게 띄우는 과정입니다. 
+앱 스택은 위 "빠른 시작"의 `deploy.sh`(또는 `deploy.ps1`/`deploy.bat`)로 띄운다. 여기서부터는
+DB 가 빈 상태에서 실제로 검색 가능한 데이터를 채우는 명령들이다 — `api` 컨테이너가 이미 떠 있는
+상태를 전제로 한다.
 
 ```bash
-# 1. (기존 컨테이너가 있다면) 깔끔하게 내리기
-docker compose down
-
-# 2. 파이썬 API 서버 구동에 필요한 패키지나 환경을 미리 빌드(준비)합니다.
-# (이때 docker-compose.yml에 설정된 NVIDIA GPU 가속 기능이 자동으로 연결됩니다.)
-docker compose build api
-
-# 3. 백그라운드에서 데이터베이스(PostgreSQL) + 그래프 DB(Neo4j) 컨테이너를 실행합니다.
-# (-d 옵션은 백그라운드 실행을 의미하므로 터미널을 계속 쓸 수 있습니다.)
-docker compose up -d db neo4j
-
-# 4. 법령 데이터 수집 및 임베딩 실행 (최초 1회는 시간이 오래 걸릴 수 있습니다 — 현행 법령 전체 대상)
-# (🔥 여기서 최적화된 GPU 모드가 켜지며 프로그레스 바와 함께 빠르게 진행됩니다!)
-docker compose run --rm api python -m app.ingest --all
+# 1. 법령 데이터 수집 및 임베딩 실행 (최초 1회는 시간이 오래 걸릴 수 있습니다 — 현행 법령 전체 대상)
+docker compose exec api python -m app.ingest --all
 
 # 이후 정기 갱신은 인자 없이 실행하면 됩니다. 법령 목록의 MST(법령일련번호)가 바뀐(=개정된)
 # 법령만 다시 받아오고, 나머지는 API 호출 자체를 건너뛰므로 비용이 작습니다. 현행 목록에서
 # 빠진(폐지된) 법령은 조문을 지워 검색 대상에서 자동으로 제외됩니다.
-docker compose run --rm api python -m app.ingest
+docker compose exec api python -m app.ingest
 
-# 5-1. 조문 인용(REFERENCES) 그래프 — LLM 없이 정규식으로 뽑으므로 전체 조문을 한 번에
+# 특정 법령만 다시 수집하려면 이름을 인자로 넘깁니다:
+docker compose exec api python -m app.ingest 도로교통법 민법
+
+# 2-1. 조문 인용(REFERENCES) 그래프 — LLM 없이 정규식으로 뽑으므로 전체 조문을 한 번에
 # 적재할 수 있습니다(20만 조문 기준 몇 분, Article 노드 약 14.8만 개 · REFERENCES 약 30만 건).
 # MERGE라서 여러 번 돌려도 안전하고, 조문을 다시 수집한 뒤 실행하면 관계가 갱신됩니다.
-docker compose run --rm api python -m app.graph_references
-docker compose run --rm api python -m app.graph_references --law "민법"   # 특정 법령만
+docker compose exec api python -m app.graph_references
+docker compose exec api python -m app.graph_references --law "민법"   # 특정 법령만
 
-# 5-2. 엔티티(의무주체·처벌 등) 관계까지 추출해 지식 그래프(Neo4j) 보강
+# 2-2. 엔티티(의무주체·처벌 등) 관계까지 추출해 지식 그래프(Neo4j) 보강
 # (조문 1개당 Gemini 1회를 호출합니다. 무료 티어는 분당 15회·일일 500회라 조문이 많으면
 #  며칠에 나눠 돌려야 합니다. 처리한 조문에 표시를 남기므로 다시 실행하면 남은 것부터 이어서
 #  진행합니다 — 중간에 멈춰도 처음부터 다시 하지 않습니다.)
@@ -527,23 +805,18 @@ docker compose run --rm api python -m app.graph_references --law "민법"   # �
 # 전체 조문은 20만 개가 넘어 한 번에 다 적재할 수 없습니다. 검색은 사용자가 설정에서 켠
 # 법만 대상으로 하고 그래프 확장 결과도 켜 둔 법으로 다시 걸러지므로, 실제로 쓰는 법령만
 # --law로 골라 적재하는 것을 권장합니다(법령 하나당 대개 몇 분).
-docker compose run --rm api python -m app.graph_ingest --law "산업안전보건법"
-docker compose run --rm api python -m app.graph_ingest --law "산업안전보건법" --law "중대재해 처벌 등에 관한 법률"
+docker compose exec api python -m app.graph_ingest --law "산업안전보건법"
+docker compose exec api python -m app.graph_ingest --law "산업안전보건법" --law "중대재해 처벌 등에 관한 법률"
 
 # 오늘 쓸 수 있는 만큼만 돌리고 싶다면:
-docker compose run --rm api python -m app.graph_ingest --limit 400
+docker compose exec api python -m app.graph_ingest --limit 400
 
 # 그래프를 아직 적재하지 않았어도 앱은 정상 동작합니다. 그래프가 비어 있으면 확장 단계를
 # 건너뛰고 벡터 검색 결과만 쓰며, 적재를 마치면 몇 분 안에 재시작 없이 다시 씁니다.
-
-# 특정 법령만 다시 수집하려면 이름을 인자로 넘깁니다:
-docker compose run --rm api python -m app.ingest 도로교통법 민법
-
-# 6. 작업 완료 후 웹 서버(FastAPI) 켜기
-docker compose up api
 ```
 
-http://localhost:8000 접속 시 자동으로 `/login`으로 이동한다. 서버 기동 시(`app/main.py`의 startup 훅) 테이블 생성·마이그레이션(`app/migrate.py`)이 실행된다. 회원가입 화면에서 계정을 만들어 사용한다.
+접속 시 자동으로 `/login`으로 이동한다. 서버 기동 시(`app/main.py`의 startup 훅) 테이블 생성·
+마이그레이션(`app/migrate.py`)이 실행된다. 회원가입 화면에서 계정을 만들어 사용한다.
 
 로그인 후 신청자 계정은 `/request`에서 심층 검토를 요청하고 `/results`에서 진행 상태를 확인·보완할 수 있으며, 관리자 계정은 `/review`·`/dashboard`에서 전체 사건을 검토·집계할 수 있다.
 

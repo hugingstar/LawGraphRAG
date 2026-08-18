@@ -8,22 +8,24 @@ class OpsSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env.ops", extra="ignore")
 
     # --- 감시 대상: 웹 ---
-    # 컨테이너 안에서 호스트로 나가는 기본 경로. 앱 compose 프로젝트 이름이 무엇이든
-    # 영향받지 않도록, 앱 네트워크에 붙는 대신 호스트가 공개한 포트를 본다.
-    app_url: str = "http://host.docker.internal:8000"
+    # api/db/neo4j 는 127.0.0.1 에만 묶여 있어 호스트가 공개한 포트로는 더 이상 닿지
+    # 않는다(README "포트 정책" 참고). 대신 이 서비스가 app 네트워크(docker-compose.ops.yml
+    # 의 external network)에 직접 붙어 컨테이너 이름으로 본다 — 포트도 컨테이너 내부
+    # 포트(8000/5432/7687)이지 호스트에 매핑된 포트(5433 등)가 아니다.
+    app_url: str = "http://api:8000"
     app_health_path: str = "/"
     app_timeout_seconds: float = 5.0
 
     # --- 감시 대상: Postgres ---
-    postgres_host: str = "host.docker.internal"
-    postgres_port: int = 5433
+    postgres_host: str = "db"
+    postgres_port: int = 5432
     postgres_db: str = "lawowly"
     postgres_user: str = "lawowly"
     postgres_password: str = "change_me"
     postgres_timeout_seconds: int = 5
 
     # --- 감시 대상: Neo4j ---
-    neo4j_uri: str = "bolt://host.docker.internal:7687"
+    neo4j_uri: str = "bolt://neo4j:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: str = "change_me"
     neo4j_timeout_seconds: float = 5.0

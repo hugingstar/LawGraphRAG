@@ -1,0 +1,18 @@
+# NVIDIA GPU 가 있는 호스트에서만 겹쳐 쓰는 오버레이.
+#
+#   개발/빌드:  docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+#   Hub 배포:   API_TAG=cuda docker compose -f docker-compose.hub.yml -f docker-compose.gpu.yml up -d
+#
+# build.sh 와 deploy.sh 는 nvidia-smi 유무를 보고 이 파일을 자동으로 붙인다.
+#
+# 이미지 태그는 여기서 건드리지 않는다. 양쪽 compose 가 이미 ${API_TAG} 로 태그를
+# 고르고 있어서, 여기서 image: 를 덮어쓰면 빌드 흐름과 충돌한다.
+services:
+  api:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]

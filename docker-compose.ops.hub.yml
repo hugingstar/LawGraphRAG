@@ -1,21 +1,10 @@
-# 기존 docker-compose.yml 과 완전히 분리된 compose 프로젝트.
+# 모니터링 스택 배포용 — ops 이미지를 빌드하지 않고 Docker Hub 에서 pull 한다.
 #
-#   docker compose -f docker-compose.ops.yml up -d --build
+#   docker compose -f docker-compose.ops.hub.yml --env-file .env.ops pull
+#   docker compose -f docker-compose.ops.hub.yml --env-file .env.ops up -d
 #
-# 의도적으로 지킨 것들:
-#  - 별도 compose 프로젝트 이름 → 앱 스택을 down 해도 모니터링은 계속 뜬다.
-#  - depends_on 없음. 감시 대상이 죽어 있을 때야말로 이게 떠 있어야 한다.
-#  - 모든 포트를 127.0.0.1 에만 바인딩. 외부에서 직접 열 수 없다.
-#
-# ops(대시보드)와 postgres-exporter 는 app 네트워크(lawgraphrag_default — docker-compose.yml
-# 의 `name: lawgraphrag` 로 이름이 고정돼 있다)에 external 로 붙어서 api/db/neo4j 를
-# 컨테이너 이름으로 직접 본다. 앱이 api/db/neo4j 를 127.0.0.1 에만 묶어 외부 노출을
-# 막았기 때문에(README "포트 정책" 참고), 예전처럼 host-gateway 로 호스트가 공개한
-# 포트를 보는 방식은 더 이상 통하지 않는다.
-#
-# 트레이드오프: 이 네트워크가 없으면(=앱 스택을 한 번도 안 띄웠으면) ops 가 시작되지
-# 않는다. build.sh 는 항상 app -> ops 순서로 올리므로 문제되지 않지만, ops 만 따로
-# 처음 띄우는 경우 앱을 먼저(한 번은) 띄워야 한다.
+# docker-compose.ops.yml 과 유일한 차이는 ops 서비스의 build: 를 뺀 것이다.
+# 나머지(별도 프로젝트 이름, host-gateway, 127.0.0.1 바인딩)는 그대로 지킨다.
 name: lawgraphrag-ops
 
 x-host-gateway: &host-gateway
@@ -29,11 +18,7 @@ networks:
 
 services:
   ops:
-    # Docker Hub push 용 이름. 앱 이미지와 달리 torch 가 없어 300MB 대라 태그를 나누지 않는다.
     image: yslee4050/lawgraphrag-ops:${OPS_TAG:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile.ops
     restart: unless-stopped
     env_file:
       - path: .env.ops
@@ -47,7 +32,6 @@ services:
       app: {}
     volumes:
       - ops_data:/data
-      # 컨테이너 상태 조회용. :ro 로 붙여 읽기만 한다.
       - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8900/healthz')\""]
@@ -55,13 +39,6 @@ services:
       timeout: 5s
       retries: 3
 
-  # Neo4j Community 는 Prometheus 메트릭을 내보내지 않는다(Enterprise 전용).
-  # 그래서 그래프 지표는 위 ops 서비스의 /metrics 가 유일한 출처다.
-  # Postgres 는 표준 exporter 가 훨씬 상세하므로 그대로 쓴다.
-  #
-  # DATA_SOURCE_NAME 은 .env.ops 에서 온다. compose 의 ${VAR} 치환은 host 환경이나
-  # 기본 .env 파일만 자동으로 읽고 .env.ops 는 안 읽으므로, 여기선 그 방식 대신
-  # env_file 로 컨테이너 환경변수에 직접 주입한다(ops 서비스와 같은 방식).
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:v0.15.0
     restart: unless-stopped
@@ -79,7 +56,6 @@ services:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.retention.time=30d"
     ports:
-      # 호스트 9090 은 pipeline-control-plane 이 이미 쓰고 있어 9091 로 뺐다.
       - "127.0.0.1:9091:9090"
     volumes:
       - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
@@ -88,9 +64,6 @@ services:
     depends_on:
       - alertmanager
 
-  # critical 알림을 즉시 Slack 으로, warning/info 는 묶어서 보낸다.
-  # 라우팅·억제 규칙은 ops/alertmanager/alertmanager.yml. entrypoint.sh 가
-  # SLACK_WEBHOOK_URL 자리표시자를 실제 값으로 치환해서 띄운다.
   alertmanager:
     image: prom/alertmanager:v0.27.0
     restart: unless-stopped
@@ -112,8 +85,6 @@ services:
       - path: .env.ops
         required: false
     environment:
-      # localhost 바인딩이라 이미 접근이 제한돼 있다. 매번 로그인시키는 대신
-      # 조회는 익명 Viewer 로 열고, 설정 변경만 admin 로그인을 요구한다.
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
       GF_USERS_DEFAULT_THEME: dark
