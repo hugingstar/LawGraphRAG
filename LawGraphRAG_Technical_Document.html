@@ -1,37 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>LawGraphRAG Technical Document</title>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+    <style>
+        /* General styling */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2, h3, h4, h5 { color: #24292e; margin-top: 24px; margin-bottom: 16px; font-weight: 600; line-height: 1.25; }
+        h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: .3em; }
+        h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: .3em; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 16px; page-break-inside: avoid; }
+        th, td { border: 1px solid #dfe2e5; padding: 6px 13px; }
+        th { background-color: #f6f8fa; font-weight: 600; }
+        tr:nth-child(2n) { background-color: #f6f8fa; }
+        code { background-color: rgba(27,31,35,.05); border-radius: 3px; font-family: monospace; font-size: 85%; padding: .2em .4em; }
+        pre { background-color: #f6f8fa; padding: 16px; border-radius: 3px; overflow: auto; page-break-inside: avoid; }
+        
+        .mermaid { text-align: center; margin: 20px 0; }
 
-    <!DOCTYPE html>
-    <html lang="ko">
-    <head>
-        <meta charset="UTF-8">
-        <style>
-            body {
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-                line-height: 1.6;
-                color: #333;
-                max-width: 1000px;
-                margin: 0 auto;
-                padding: 20px;
+        /* Print Media Setup */
+        @media print {
+            @page {
+                size: A4 portrait;
+                margin: 10mm; /* Narrow margin */
             }
-            h1, h2, h3, h4, h5 {
-                color: #24292e;
-                margin-top: 24px;
-                margin-bottom: 16px;
-                font-weight: 600;
-                line-height: 1.25;
+            @page landscape-page {
+                size: A4 landscape;
+                margin: 10mm;
             }
-            h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: .3em; }
-            h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: .3em; }
-            h3 { font-size: 1.25em; }
-            table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
-            th, td { border: 1px solid #dfe2e5; padding: 6px 13px; }
-            th { background-color: #f6f8fa; font-weight: 600; }
-            tr:nth-child(2n) { background-color: #f6f8fa; }
-            code { background-color: rgba(27,31,35,.05); border-radius: 3px; font-family: monospace; font-size: 85%; padding: .2em .4em; }
-            pre { background-color: #f6f8fa; padding: 16px; border-radius: 3px; overflow: auto; }
-        </style>
-    </head>
-    <body>
-        <h1>Law Owly (법 부엉이) - 기술 문서</h1>
+            .landscape-diagram {
+                page: landscape-page;
+                width: 100%;
+                display: block;
+                page-break-before: always;
+                page-break-after: always;
+            }
+            .landscape-diagram .mermaid svg {
+                max-width: 100%;
+                max-height: 100%;
+            }
+            body { padding: 0; max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Law Owly (법 부엉이) - 기술 문서</h1>
 <h2>🚀 빠른 시작 — Rocky Linux VM</h2>
 <p>클론하고 <code>deploy.sh</code> 하나만 실행하면 된다(Windows 는 <code>deploy.bat</code> 더블클릭 또는 <code>deploy.ps1</code>).
 아래는 갓 설치한 Rocky Linux 9 VM 기준이다.</p>
@@ -41,12 +65,12 @@
 <li><strong>이미지 업로드 (<code>docker-push.ps1</code>)</strong>: 테스트가 완료된 최종 운영용 이미지(cpu, cuda, ops)를 빌드하여 Docker Hub(<code>yslee4050/lawowly</code>)에 Push합니다.</li>
 <li><strong>운영 서버 적용 (<code>deploy.sh</code>)</strong>: 리눅스 운영 서버에서 실행하면, 별도의 빌드 과정 없이 Docker Hub의 최신 이미지를 고속으로 Pull 받아 무중단 재시작합니다.</li>
 </ol>
-<pre><code class="language-mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;18px&quot;}, &quot;flowchart&quot;: {&quot;nodeSpacing&quot;: 80, &quot;rankSpacing&quot;: 100}}}%%
+<div class="mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;18px&quot;}, &quot;flowchart&quot;: {&quot;nodeSpacing&quot;: 80, &quot;rankSpacing&quot;: 100}}}%%
 flowchart LR
     Local[1. 로컬 테스트&lt;br/&gt;build.bat] --&gt;|테스트 완료| Push[2. 이미지 업로드&lt;br/&gt;docker-push.ps1]
     Push --&gt;|Push| Hub[(Docker Hub&lt;br/&gt;yslee4050/lawowly)]
     Hub -.-&gt;|Pull| Deploy[3. 운영 서버 배포&lt;br/&gt;deploy.sh]
-</code></pre>
+</div>
 <h3>1) Docker 설치</h3>
 <p>Rocky 는 Docker 를 기본 제공하지 않으므로 공식 저장소를 추가한다.</p>
 <pre><code class="language-bash">sudo dnf -y install dnf-plugins-core git
@@ -215,7 +239,7 @@ cd LawGraphRAG
 산업안전 등, <a href="app/law_category.py">app/law_category.py</a>)로 분류되어 검색·그래프 확장을
 해당 분야로 먼저 좁힌다.</p>
 <h2>아키텍처</h2>
-<pre><code class="language-mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;18px&quot;}, &quot;flowchart&quot;: {&quot;nodeSpacing&quot;: 80, &quot;rankSpacing&quot;: 100, &quot;htmlLabels&quot;: true}}}%%
+<div class="landscape-diagram"><div class="mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;18px&quot;}, &quot;flowchart&quot;: {&quot;nodeSpacing&quot;: 80, &quot;rankSpacing&quot;: 100, &quot;htmlLabels&quot;: true}}}%%
 flowchart TD
     User([&quot;사용자 (신청자 / 검토 담당자)&quot;]) --&gt;|로그인 세션 쿠키| Auth[&quot;인증 미들웨어 (app/auth.py)&quot;]
     Auth --&gt; App[&quot;FastAPI 웹 서버 (app/main.py)&quot;]
@@ -286,7 +310,7 @@ flowchart TD
     Failed -.-&gt;|error 이벤트| App
     R_Settings --&gt;|활성화한 법 저장| LawToggle
     App --&gt;|Jinja2 템플릿 렌더링| User
-</code></pre>
+</div></div>
 <h3>💡 초보자를 위한 아키텍처 상세 설명</h3>
 <p>이 프로젝트는 마치 도서관에서 책을 미리 분류해 두고, 나중에 질문을 받으면 가장 알맞은 책을 찾아주는 것처럼,
 그리고 그 위에 &quot;민원 접수창구(사건 관리)&quot;를 얹은 구조로 동작합니다. 크게 <strong>다섯 부분</strong>(웹 애플리케이션 계층, 데이터 수집, 그래프 구축, AI 분석, 데이터베이스 구조)으로 나뉩니다.</p>
@@ -426,7 +450,7 @@ flowchart TD
 </ul>
 <h4>4. 데이터베이스 ER 다이어그램 (ERD)</h4>
 <h4>4-1. 법령 검색 도메인 (법제처 데이터 + 임베딩)</h4>
-<pre><code class="language-mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;16px&quot;}}}%%
+<div class="mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;16px&quot;}}}%%
 classDiagram
     direction LR
 
@@ -480,7 +504,7 @@ classDiagram
     laws &quot;1&quot; *-- &quot;*&quot; articles : 포함
     articles &quot;1&quot; *-- &quot;*&quot; article_chunks : 분할
     laws &quot;1&quot; --&gt; &quot;*&quot; user_law_selections : 계정별 활성화
-</code></pre>
+</div>
 <p><strong>테이블 세부 설명:</strong></p>
 <ul>
 <li><code>law_categories</code> (분야): 민사·형사·노동·산업안전·부동산건설 등 법령 대분류 16종. 검색을 이 분야로 먼저 좁혀 무관한 분야의 조문이 후보에 섞이지 않게 한다(<code>app/law_category.py</code>).</li>
@@ -491,7 +515,7 @@ classDiagram
 </ul>
 <h4>4-2. 지식 그래프 도메인 (Neo4j, <code>graph_ingest.py</code>로 적재)</h4>
 <p>Postgres의 <code>laws</code>/<code>articles</code>와 동일한 조문을 가리키지만(law_id·article_no·article_no_sub로 매핑), 관계형 테이블이 아니라 노드-관계 그래프로 저장되어 &quot;조문 간 연결&quot;을 직접 순회할 수 있습니다.</p>
-<pre><code class="language-mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;20px&quot;}, &quot;flowchart&quot;: {&quot;nodeSpacing&quot;: 45, &quot;rankSpacing&quot;: 65}}}%%
+<div class="mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;20px&quot;}, &quot;flowchart&quot;: {&quot;nodeSpacing&quot;: 45, &quot;rankSpacing&quot;: 65}}}%%
 flowchart LR
     Domain((&quot;Domain&lt;br/&gt;code, name&quot;))
     Law((&quot;Law&lt;br/&gt;law_id, law_name&quot;))
@@ -505,7 +529,7 @@ flowchart LR
     Article --&gt;|APPLIES_TO| Entity
     Article --&gt;|PENALIZED_BY| Entity
     Article --&gt;|REQUIRES| Entity
-</code></pre>
+</div>
 <p><strong>노드/관계 설명:</strong></p>
 <ul>
 <li><code>Domain</code> 노드: Postgres <code>law_categories</code>를 미러링한 분야 노드입니다. <code>CONTAINS</code>로 그 분야의 법령들과 연결되며, 그래프 확장 자체를 분야 경계로 자르지는 않습니다(<code>REFERENCES</code>처럼 법령을 넘나드는 인용은 그대로 허용) — 검색 후보를 좁히는 깔때기 역할입니다.</li>
@@ -519,7 +543,7 @@ flowchart LR
 <p><code>regions</code>는 시도와 시군구를 한 테이블에 담는 <strong>자기참조 구조</strong>다. 시군구 코드(&quot;11010&quot;)의 앞
 2자리가 곧 소속 시도 코드(&quot;11&quot;)이므로 <code>parent_code</code>를 코드에서 바로 도출할 수 있고, 지도의
 드릴다운도 같은 규칙 하나로 처리된다.</p>
-<pre><code class="language-mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;16px&quot;}}}%%
+<div class="mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;16px&quot;}}}%%
 classDiagram
     direction LR
 
@@ -617,7 +641,7 @@ classDiagram
     incidents &quot;1&quot; *-- &quot;*&quot; incident_attachments : 첨부파일
     users &quot;1&quot; --&gt; &quot;*&quot; incident_events : 처리자
     users &quot;1&quot; --&gt; &quot;*&quot; incident_comments : 작성자
-</code></pre>
+</div>
 <p><strong>테이블 세부 설명:</strong></p>
 <ul>
 <li><code>regions</code>: 전국 행정구역(시도 17 + 시군구 250). 지도 경계 파일에서 시드되므로 지도 도형의 feature code와 항상 일치합니다(<code>app/regions_seed.py</code>).</li>
@@ -683,7 +707,7 @@ classDiagram
 <p>앱 스택(<code>docker-compose.yml</code>)과 <strong>완전히 분리된</strong> 별도 스택이다. 앱을 내려도 이 스택은
 계속 떠서 &quot;지금 앱이 죽어 있다&quot;를 감시할 수 있어야 하므로, <code>depends_on</code>도 앱 코드
 <code>import</code>도 없다(자세한 배경은 <a href="ops/README.md">ops/README.md</a>).</p>
-<pre><code class="language-mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;20px&quot;}, &quot;flowchart&quot;: {&quot;nodeSpacing&quot;: 45, &quot;rankSpacing&quot;: 60}}}%%
+<div class="mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;20px&quot;}, &quot;flowchart&quot;: {&quot;nodeSpacing&quot;: 45, &quot;rankSpacing&quot;: 60}}}%%
 flowchart TD
     subgraph App_Stack [&quot;앱 스택 (docker-compose.yml, 독립 실행)&quot;]
         AppAPI[&quot;api 컨테이너&lt;br/&gt;:8000&quot;]
@@ -712,7 +736,7 @@ flowchart TD
     AlertMgr --&gt;|critical/warning 라우팅| Slack[&quot;Slack Webhook&lt;br/&gt;(.env.ops, 저장소에 커밋 안 함)&quot;]
     Prom --&gt; Grafana
     OpsSvc --&gt;|&quot;조문 인용 그래프&lt;br/&gt;WebGL 3D 뷰&quot;| Grafana
-</code></pre>
+</div>
 <p><strong>보안/격리 설계:</strong></p>
 <ul>
 <li><strong>모든 포트가 <code>127.0.0.1</code>에만 바인딩</strong>된다. 외부에서 직접 열 수 없고, 원격에서 보려면 SSH 터널을 써야 한다.</li>
@@ -823,6 +847,5 @@ VACUUM (PARALLEL 0, ANALYZE) article_chunks;   -- 청크는 FK ON DELETE CASCADE
 <li><strong>행정구역 경계</strong>: 통계청(KOSTAT) 2018 행정구역 경계 — <a href="https://github.com/southkorea/southkorea-maps">southkorea/southkorea-maps</a> 배포본을 <code>app/static/geo/</code>에 포함. <strong>KOGL(공공누리)</strong> 라이선스에 따라 출처를 표시한다.</li>
 </ul>
 
-    </body>
-    </html>
-    
+</body>
+</html>
