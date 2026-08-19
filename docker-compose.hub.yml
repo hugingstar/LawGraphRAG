@@ -53,7 +53,7 @@ services:
 
   api:
     # 기본은 cpu. 어느 PC 에서도 뜨는 쪽을 기본값으로 둔다.
-    image: yslee4050/lawgraphrag-api:${API_TAG:-cpu}
+    image: yslee4050/lawowly:${API_TAG:-cpu}
     restart: unless-stopped
     env_file: .env
     environment:

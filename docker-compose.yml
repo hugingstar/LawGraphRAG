@@ -54,7 +54,7 @@ services:
   api:
     # Docker Hub 로 push 할 때 쓰는 이름. TORCH_VARIANT 와 태그를 같이 움직인다.
     #   TORCH_VARIANT=cpu API_TAG=cpu docker compose build api
-    image: yslee4050/lawgraphrag-api:${API_TAG:-cuda}
+    image: yslee4050/lawowly:${API_TAG:-cuda}
     build:
       context: .
       args:

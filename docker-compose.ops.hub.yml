@@ -18,7 +18,7 @@ networks:
 
 services:
   ops:
-    image: yslee4050/lawgraphrag-ops:${OPS_TAG:-latest}
+    image: yslee4050/lawowly-ops:${OPS_TAG:-latest}
     restart: unless-stopped
     env_file:
       - path: .env.ops

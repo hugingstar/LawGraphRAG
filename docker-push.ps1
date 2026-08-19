@@ -5,9 +5,9 @@
 #   .\docker-push.ps1 -Only ops  # ops 만
 #
 # 올라가는 것:
-#   yslee4050/lawgraphrag-api:cpu     약 2.5GB  (GPU 없는 PC 용, latest 도 같이 가리킴)
-#   yslee4050/lawgraphrag-api:cuda    약 9GB    (NVIDIA GPU 있는 PC 용)
-#   yslee4050/lawgraphrag-ops:latest  약 300MB
+#   yslee4050/lawowly:cpu     약 2.5GB  (GPU 없는 PC 용, latest 도 같이 가리킴)
+#   yslee4050/lawowly:cuda    약 9GB    (NVIDIA GPU 있는 PC 용)
+#   yslee4050/lawowly-ops:latest  약 300MB
 param(
     [ValidateSet("all", "cpu", "cuda", "ops")]
     [string]$Only = "all"
@@ -38,17 +38,17 @@ if ($Only -eq "all" -or $Only -eq "cpu") {
     # latest 는 cpu 를 가리킨다. 태그를 생략하고 pull 한 사람이
     # 9GB 짜리 CUDA 이미지를 받는 일이 없도록.
     Invoke-Step "태그: api:cpu -> api:latest" {
-        docker tag yslee4050/lawgraphrag-api:cpu yslee4050/lawgraphrag-api:latest
+        docker tag yslee4050/lawowly:cpu yslee4050/lawowly:latest
     }
-    Invoke-Step "푸시: api:cpu"    { docker push yslee4050/lawgraphrag-api:cpu }
-    Invoke-Step "푸시: api:latest" { docker push yslee4050/lawgraphrag-api:latest }
+    Invoke-Step "푸시: api:cpu"    { docker push yslee4050/lawowly:cpu }
+    Invoke-Step "푸시: api:latest" { docker push yslee4050/lawowly:latest }
 }
 
 if ($Only -eq "all" -or $Only -eq "cuda") {
     $env:TORCH_VARIANT = "cuda"
     $env:API_TAG = "cuda"
     Invoke-Step "빌드: api:cuda" { docker compose build api }
-    Invoke-Step "푸시: api:cuda" { docker push yslee4050/lawgraphrag-api:cuda }
+    Invoke-Step "푸시: api:cuda" { docker push yslee4050/lawowly:cuda }
 }
 
 if ($Only -eq "all" -or $Only -eq "ops") {
@@ -56,7 +56,7 @@ if ($Only -eq "all" -or $Only -eq "ops") {
     Invoke-Step "빌드: ops:latest" {
         docker compose -f docker-compose.ops.yml --env-file .env.ops build ops
     }
-    Invoke-Step "푸시: ops:latest" { docker push yslee4050/lawgraphrag-ops:latest }
+    Invoke-Step "푸시: ops:latest" { docker push yslee4050/lawowly-ops:latest }
 }
 
 Write-Host ""

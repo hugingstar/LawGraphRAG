@@ -30,7 +30,7 @@ networks:
 services:
   ops:
     # Docker Hub push 용 이름. 앱 이미지와 달리 torch 가 없어 300MB 대라 태그를 나누지 않는다.
-    image: yslee4050/lawgraphrag-ops:${OPS_TAG:-latest}
+    image: yslee4050/lawowly-ops:${OPS_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile.ops

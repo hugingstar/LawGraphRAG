@@ -12,13 +12,13 @@
 # 미리 올려둔 버전)다. 둘 중 뭘 쓸지 모르겠으면 기본값(빌드)을 쓰면 된다.
 set -e
 
-MODE=build
+MODE=hub
 RESET_DATA=false
 OPEN_FIREWALL=true
 WITH_OPS=true
 for arg in "$@"; do
     case "$arg" in
-        --hub)         MODE=hub ;;
+        --build)       MODE=build ;;
         --reset-data)  RESET_DATA=maybe ;;
         --no-firewall) OPEN_FIREWALL=false ;;
         --no-ops)      WITH_OPS=false ;;
