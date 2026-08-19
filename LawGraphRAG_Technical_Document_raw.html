@@ -1,74 +1,16 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <title>LawGraphRAG Technical Document</title>
-    <script type="module">
-      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-      mermaid.initialize({ startOnLoad: true, theme: 'default' });
-    </script>
-    <style>
-        /* General styling */
-        body {
-            font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
-            font-size: 11pt;
-            line-height: 1.6;
-            color: #333;
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        h1, h2, h3, h4, h5 { 
-            font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
-            color: #24292e; 
-            margin-top: 24px; 
-            margin-bottom: 16px; 
-            font-weight: 600; 
-            line-height: 1.25; 
-        }
-        h1 { font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: .3em; }
-        h2 { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: .3em; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 16px; page-break-inside: avoid; }
-        th, td { border: 1px solid #dfe2e5; padding: 6px 13px; font-size: 10pt; }
-        th { background-color: #f6f8fa; font-weight: 600; }
-        tr:nth-child(2n) { background-color: #f6f8fa; }
-        code { background-color: rgba(27,31,35,.05); border-radius: 3px; font-family: monospace; padding: .2em .4em; }
-        pre { background-color: #f6f8fa; padding: 16px; border-radius: 3px; overflow: auto; page-break-inside: avoid; }
-        
-        .mermaid { text-align: center; margin: 20px 0; }
-        .mermaid svg { max-width: 100%; height: auto; }
-
-        /* Print Media Setup */
-        @media print {
-            @page {
-                size: A4 portrait;
-                margin: 10mm; /* Narrow margin */
-            }
-            body { padding: 0; max-width: 100%; font-size: 11pt; }
-            /* Ensure diagrams don't break across pages and fit within the width */
-            .mermaid {
-                page-break-inside: avoid;
-                width: 100%;
-                display: block;
-                zoom: 0.9; /* Slightly reduce size to prevent cropping */
-            }
-        }
-    </style>
-</head>
-<body>
-    <h1>Law Owly (법 부엉이) - LawGraphRAG</h1>
+<h1>Law Owly (법 부엉이) - LawGraphRAG</h1>
 <p>Law Owly는 사용자가 작성한 **사고 진술문(자연어)**을 기반으로, 관련된 **법률 조문을 지식 그래프(Knowledge Graph)와 벡터 검색(RAG)**을 통해 정확하게 찾아주는 스마트 법률 지원 시스템입니다.</p>
 <p>단순 검색을 넘어, 전국 단위 사건사고 접수부터 검토까지 처리하는 워크플로우와 지역별 발생 현황을 시각화하는 대시보드 기능이 통합되어 있습니다.</p>
 <hr>
 <h2>🚀 빠른 시작 가이드 (초보자용)</h2>
 <h3>💡 3단계 배포 워크플로우</h3>
 <p>이 프로젝트는 Docker 기반으로 동작하여 복잡한 환경 설정 없이 스크립트 하나로 전체 시스템을 띄울 수 있습니다.</p>
-<div class="mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;20px&quot;, &quot;fontFamily&quot;: &quot;sans-serif&quot;}, &quot;flowchart&quot;: {&quot;nodeSpacing&quot;: 100, &quot;rankSpacing&quot;: 120, &quot;htmlLabels&quot;: true}}}%%
+<pre><code class="language-mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;20px&quot;, &quot;fontFamily&quot;: &quot;sans-serif&quot;}, &quot;flowchart&quot;: {&quot;nodeSpacing&quot;: 100, &quot;rankSpacing&quot;: 120, &quot;htmlLabels&quot;: true}}}%%
 flowchart LR
     Local[1. 로컬 테스트&lt;br/&gt;build.bat] --&gt;|테스트 성공| Push[2. 이미지 업로드&lt;br/&gt;docker-push.ps1]
     Push --&gt;|Push| Hub[(Docker Hub&lt;br/&gt;yslee4050/lawowly)]
     Hub -.-&gt;|Pull| Deploy[3. 운영 서버 배포&lt;br/&gt;deploy.sh]
-</div>
+</code></pre>
 <h3>1️⃣ 소스 코드 다운로드</h3>
 <pre><code class="language-bash">git clone https://github.com/hugingstar/LawGraphRAG.git
 cd LawGraphRAG
@@ -96,7 +38,7 @@ cd LawGraphRAG
 <hr>
 <h2>🏛️ 시스템 아키텍처 (Architecture)</h2>
 <p>시스템은 웹 애플리케이션(FastAPI), 데이터 수집 파이프라인, 그래프 추출 AI, 그리고 RAG 검색 엔진으로 촘촘히 연결되어 있습니다.</p>
-<div class="mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;20px&quot;, &quot;fontFamily&quot;: &quot;sans-serif&quot;}, &quot;flowchart&quot;: {&quot;nodeSpacing&quot;: 120, &quot;rankSpacing&quot;: 120, &quot;htmlLabels&quot;: true}}}%%
+<pre><code class="language-mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;20px&quot;, &quot;fontFamily&quot;: &quot;sans-serif&quot;}, &quot;flowchart&quot;: {&quot;nodeSpacing&quot;: 120, &quot;rankSpacing&quot;: 120, &quot;htmlLabels&quot;: true}}}%%
 flowchart TD
     User([&quot;사용자 (신청자 / 담당자)&quot;]) --&gt;|HTTP Request| Nginx[&quot;Nginx (포트 80)&quot;]
     Nginx --&gt; App[&quot;FastAPI 서버 (포트 8000)&quot;]
@@ -128,11 +70,11 @@ flowchart TD
     %% 관리자/모니터링
     Prometheus[&quot;Prometheus&quot;] -.-&gt;|메트릭 수집| App
     Grafana[&quot;Grafana 대시보드&quot;] -.-&gt; Prometheus
-</div>
+</code></pre>
 <hr>
 <h2>🗄️ 데이터베이스 ER 다이어그램 (ERD)</h2>
 <p>PostgreSQL을 활용해 법령 구조(법, 조문, 조문 분할 조각)를 저장하고, 사용자 및 사건(Incident) 상태를 관리합니다.</p>
-<div class="mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;20px&quot;, &quot;fontFamily&quot;: &quot;sans-serif&quot;}, &quot;class&quot;: {&quot;nodeSpacing&quot;: 120, &quot;rankSpacing&quot;: 150}}}%%
+<pre><code class="language-mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;fontSize&quot;: &quot;20px&quot;, &quot;fontFamily&quot;: &quot;sans-serif&quot;}, &quot;class&quot;: {&quot;nodeSpacing&quot;: 120, &quot;rankSpacing&quot;: 150}}}%%
 classDiagram
     direction LR
 
@@ -185,7 +127,7 @@ classDiagram
     
     users &quot;1&quot; --&gt; &quot;*&quot; incidents : 사건 접수
     incidents &quot;1&quot; *-- &quot;*&quot; incident_events : 처리 상태 이력 관리
-</div>
+</code></pre>
 <hr>
 <h2>🛠 주요 기능 요약</h2>
 <ol>
@@ -194,6 +136,3 @@ classDiagram
 <li><strong>전국 사건 현황 시각화</strong>: 통계청 TopoJSON 데이터를 활용한 코로플레스(Choropleth) 지도를 통해 전국 시/도/구 단위로 어느 지역에 어떤 사건이 집중되는지 한눈에 파악할 수 있습니다.</li>
 <li><strong>증분 법령 수집</strong>: 법제처 Open API와 연동하여 법령이 새로 바뀌거나 폐지된 내용만 똑똑하게 부분 업데이트합니다. 비용과 시간을 획기적으로 절약합니다.</li>
 </ol>
-
-</body>
-</html>
